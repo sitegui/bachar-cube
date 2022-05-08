@@ -1,7 +1,12 @@
+use crate::position::{Movement, MovementKind};
+use dashmap::DashSet;
 use itertools::Itertools;
 use position::Position;
-use std::collections::{HashSet, VecDeque};
+use rayon::prelude::*;
+use rayon::{ThreadPool, ThreadPoolBuilder};
+use std::error::Error;
 use std::fmt;
+use std::process::exit;
 use std::time::Instant;
 
 mod position;
@@ -96,7 +101,7 @@ impl OuterLayer {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let initial_position = Position {
         top: OuterLayer::new([
             OuterPiece::YellowGreenOrange1,
@@ -132,40 +137,67 @@ fn main() {
     let solved_position = Position::solved();
 
     println!("{}", initial_position);
-    initial_position.for_each_movement(|pos| {
-        println!("{}", pos);
+    initial_position.for_each_movement(MovementKind::ALL, |pos| {
+        println!("{}", pos.position);
     });
 
-    let mut seen_positions = HashSet::new();
-    let mut pending_positions = VecDeque::new();
-    pending_positions.push_back(initial_position);
-    seen_positions.insert(initial_position);
-    let mut visited_positions = 0;
+    let pool = ThreadPoolBuilder::new().num_threads(16).build()?;
 
+    let seen_positions = DashSet::new();
+    let mut positions = vec![Movement {
+        position: initial_position,
+        next_kind: MovementKind::ALL,
+    }];
     let start = Instant::now();
-    while let Some(to_visit) = pending_positions.pop_front() {
-        visited_positions += 1;
-        to_visit.for_each_movement(|pos| {
-            if seen_positions.insert(pos) {
-                pending_positions.push_back(pos);
-            }
-        });
-
-        if visited_positions % 1000 == 0 {
-            println!(
-                "visited = {}, seen = {}, pending = {}",
-                visited_positions,
-                seen_positions.len(),
-                pending_positions.len()
-            );
-        }
-
-        if visited_positions == 1_000_000 {
-            break;
-        }
+    for _ in 0..15 {
+        positions = explore_multi_thread(&pool, solved_position, &seen_positions, positions);
     }
 
     eprintln!("start.elapsed() = {:?}", start.elapsed());
+
+    Ok(())
+}
+
+fn explore_multi_thread(
+    pool: &ThreadPool,
+    solved_position: Position,
+    seen_positions: &DashSet<Position>,
+    movements: Vec<Movement>,
+) -> Vec<Movement> {
+    let pool_size = pool.current_num_threads();
+    println!("Explore {} movements", movements.len());
+
+    let movements_by_thread = movements.len() / pool_size + 1;
+    let task_results: Vec<Vec<Movement>> = pool.scope(|s| {
+        movements
+            .into_par_iter()
+            .chunks(movements_by_thread)
+            .map(|movements| {
+                let mut new_movements = Vec::new();
+                for movement in movements {
+                    movement
+                        .position
+                        .for_each_movement(movement.next_kind, |new_moviment| {
+                            if new_moviment.position == solved_position {
+                                print!("SOLVED!");
+                                exit(0);
+                            }
+
+                            if seen_positions.insert(new_moviment.position) {
+                                new_movements.push(new_moviment);
+                            }
+                        });
+                }
+                new_movements
+            })
+            .collect()
+    });
+
+    let mut all_new_movements = Vec::with_capacity(task_results.iter().map(Vec::len).sum());
+    for new_movements in task_results {
+        all_new_movements.extend(new_movements);
+    }
+    all_new_movements
 }
 
 impl fmt::Display for OuterLayer {

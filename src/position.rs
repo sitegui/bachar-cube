@@ -8,6 +8,19 @@ pub struct Position {
     pub bottom: OuterLayer,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct MovementKind {
+    top: bool,
+    middle: bool,
+    bottom: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Movement {
+    pub position: Position,
+    pub next_kind: MovementKind,
+}
+
 impl Position {
     pub fn solved() -> Position {
         Position {
@@ -43,30 +56,68 @@ impl Position {
         }
     }
 
-    pub fn for_each_movement(&self, mut f: impl FnMut(Self)) {
-        self.top.for_each_movement(|new_top| {
-            f(Position {
-                top: new_top,
-                middle_solved: self.middle_solved,
-                bottom: self.bottom,
-            })
-        });
+    pub fn for_each_movement(&self, kind: MovementKind, mut f: impl FnMut(Movement)) {
+        if kind.top {
+            self.top.for_each_movement(|new_top| {
+                let new_position = Position {
+                    top: new_top,
+                    middle_solved: self.middle_solved,
+                    bottom: self.bottom,
+                };
+                f(Movement {
+                    position: new_position,
+                    next_kind: MovementKind {
+                        top: false,
+                        middle: true,
+                        bottom: kind.bottom,
+                    },
+                })
+            });
+        }
 
-        let (flipped_top, flipped_bottom) = self.top.flip(self.bottom);
-        f(Position {
-            top: flipped_top,
-            middle_solved: !self.middle_solved,
-            bottom: flipped_bottom,
-        });
+        if kind.middle {
+            let (flipped_top, flipped_bottom) = self.top.flip(self.bottom);
+            let new_position = Position {
+                top: flipped_top,
+                middle_solved: !self.middle_solved,
+                bottom: flipped_bottom,
+            };
+            f(Movement {
+                position: new_position,
+                next_kind: MovementKind {
+                    top: true,
+                    middle: false,
+                    bottom: true,
+                },
+            });
+        }
 
-        self.bottom.for_each_movement(|new_bottom| {
-            f(Position {
-                top: self.top,
-                middle_solved: self.middle_solved,
-                bottom: new_bottom,
-            })
-        });
+        if kind.bottom {
+            self.bottom.for_each_movement(|new_bottom| {
+                let new_position = Position {
+                    top: self.top,
+                    middle_solved: self.middle_solved,
+                    bottom: new_bottom,
+                };
+                f(Movement {
+                    position: new_position,
+                    next_kind: MovementKind {
+                        top: kind.top,
+                        middle: true,
+                        bottom: false,
+                    },
+                })
+            });
+        }
     }
+}
+
+impl MovementKind {
+    pub const ALL: MovementKind = MovementKind {
+        top: true,
+        middle: true,
+        bottom: true,
+    };
 }
 
 impl fmt::Display for Position {
