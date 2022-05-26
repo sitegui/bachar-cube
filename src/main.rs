@@ -1,105 +1,22 @@
-use crate::position::{Movement, MovementKind};
-use dashmap::DashSet;
+use crate::position::{Movement, MovementChange, MovementKind};
+use crate::prefix_set::PrefixSet;
+use crate::priority_queue::PriorityQueue;
 use itertools::Itertools;
+use outer_layer::OuterLayer;
+use outer_piece::OuterPiece;
 use position::Position;
-use rayon::prelude::*;
-use rayon::{ThreadPool, ThreadPoolBuilder};
+use std::cmp::Ordering;
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use std::error::Error;
-use std::fmt;
-use std::process::exit;
 use std::time::Instant;
 
+mod outer_layer;
+mod outer_piece;
 mod position;
-
-/// Represent the pieces that can be in the top or bottom layers
-#[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]
-#[repr(u8)]
-enum OuterPiece {
-    // Top
-    WhiteRedBlue1 = 0,
-    WhiteRedBlue2 = 1,
-    WhiteBlue = 2,
-    WhiteBlueOrange1 = 4,
-    WhiteBlueOrange2 = 5,
-    WhiteOrange = 6,
-    WhiteOrangeGreen1 = 8,
-    WhiteOrangeGreen2 = 9,
-    WhiteGreen = 10,
-    WhiteGreenRed1 = 12,
-    WhiteGreenRed2 = 13,
-    WhiteRed = 14,
-    // Bottom
-    YellowOrangeBlue1 = 16,
-    YellowOrangeBlue2 = 17,
-    YellowBlue = 18,
-    YellowBlueRed1 = 20,
-    YellowBlueRed2 = 21,
-    YellowRed = 22,
-    YellowRedGreen1 = 24,
-    YellowRedGreen2 = 25,
-    YellowGreen = 26,
-    YellowGreenOrange1 = 28,
-    YellowGreenOrange2 = 29,
-    YellowOrange = 30,
-
-    Unknown = 255,
-}
-
-impl OuterPiece {
-    fn can_split_before(self) -> bool {
-        self as u8 % 2 == 0
-    }
-}
-
-#[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]
-pub struct OuterLayer {
-    pieces: [OuterPiece; OUTER_LAYER_PIECES],
-}
-
-const OUTER_LAYER_PIECES: usize = 12;
-const OUTER_LAYER_HALF_PIECES: usize = 6;
-
-impl OuterLayer {
-    fn new(pieces: [OuterPiece; 12]) -> Self {
-        assert!(pieces[0].can_split_before());
-        assert!(pieces[OUTER_LAYER_HALF_PIECES].can_split_before());
-
-        OuterLayer { pieces }
-    }
-
-    fn for_each_movement(self, mut f: impl FnMut(Self)) {
-        for shift in 1..OUTER_LAYER_PIECES {
-            let new_cut = (shift + OUTER_LAYER_HALF_PIECES) % OUTER_LAYER_PIECES;
-
-            if self.pieces[shift].can_split_before() && self.pieces[new_cut].can_split_before() {
-                let mut new_pieces = [OuterPiece::Unknown; OUTER_LAYER_PIECES];
-                new_pieces[..OUTER_LAYER_PIECES - shift].copy_from_slice(&self.pieces[shift..]);
-                new_pieces[OUTER_LAYER_PIECES - shift..].copy_from_slice(&self.pieces[..shift]);
-                f(OuterLayer { pieces: new_pieces });
-            }
-        }
-    }
-
-    fn flip(self, other: Self) -> (Self, Self) {
-        let mut new_self_pieces = self.pieces;
-        let mut new_other_pieces = other.pieces;
-
-        // Movable pieces
-        new_self_pieces[..OUTER_LAYER_HALF_PIECES]
-            .copy_from_slice(&other.pieces[..OUTER_LAYER_HALF_PIECES]);
-        new_other_pieces[..OUTER_LAYER_HALF_PIECES]
-            .copy_from_slice(&self.pieces[..OUTER_LAYER_HALF_PIECES]);
-
-        (
-            OuterLayer {
-                pieces: new_self_pieces,
-            },
-            OuterLayer {
-                pieces: new_other_pieces,
-            },
-        )
-    }
-}
+mod prefix_set;
+mod priority_queue;
+mod visited_graph;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let initial_position = Position {
@@ -134,118 +51,194 @@ fn main() -> Result<(), Box<dyn Error>> {
         ]),
     };
 
-    let solved_position = Position::solved();
+    let initial_position2 = Position {
+        top: OuterLayer::new([
+            OuterPiece::WhiteOrange,
+            OuterPiece::YellowGreenOrange1,
+            OuterPiece::YellowGreenOrange2,
+            OuterPiece::YellowGreen,
+            OuterPiece::YellowOrange,
+            OuterPiece::WhiteGreen,
+            OuterPiece::WhiteBlueOrange1,
+            OuterPiece::WhiteBlueOrange2,
+            OuterPiece::WhiteGreenRed1,
+            OuterPiece::WhiteGreenRed2,
+            OuterPiece::YellowBlueRed1,
+            OuterPiece::YellowBlueRed2,
+        ]),
+        middle_solved: true,
+        bottom: OuterLayer::new([
+            OuterPiece::WhiteRed,
+            OuterPiece::WhiteRedBlue1,
+            OuterPiece::WhiteRedBlue2,
+            OuterPiece::WhiteBlue,
+            OuterPiece::WhiteOrangeGreen1,
+            OuterPiece::WhiteOrangeGreen2,
+            OuterPiece::YellowRed,
+            OuterPiece::YellowRedGreen1,
+            OuterPiece::YellowRedGreen2,
+            OuterPiece::YellowOrangeBlue1,
+            OuterPiece::YellowOrangeBlue2,
+            OuterPiece::YellowBlue,
+        ]),
+    };
 
-    println!("{}", initial_position);
-    initial_position.for_each_movement(MovementKind::ALL, |pos| {
+    println!("{}", initial_position2);
+    initial_position2.for_each_movement(MovementKind::ALL, |pos| {
         println!("{}", pos.position);
     });
 
-    let pool = ThreadPoolBuilder::new().num_threads(16).build()?;
+    // let pool = ThreadPoolBuilder::new().num_threads(16).build()?;
+    // let seen_positions = DashSet::new();
 
-    let seen_positions = DashSet::new();
-    let mut positions = vec![Movement {
-        position: initial_position,
-        next_kind: MovementKind::ALL,
-    }];
     let start = Instant::now();
-    for _ in 0..15 {
-        positions = explore_multi_thread(&pool, solved_position, &seen_positions, positions);
-    }
-
+    explore_simple(initial_position2);
     eprintln!("start.elapsed() = {:?}", start.elapsed());
 
     Ok(())
 }
 
-fn explore_multi_thread(
-    pool: &ThreadPool,
-    solved_position: Position,
-    seen_positions: &DashSet<Position>,
-    movements: Vec<Movement>,
-) -> Vec<Movement> {
-    let pool_size = pool.current_num_threads();
-    println!("Explore {} movements", movements.len());
+#[derive(Debug, Clone, Copy)]
+struct VisitedPosition {
+    movement: Movement,
+    prev_index: Option<usize>,
+}
 
-    let movements_by_thread = movements.len() / pool_size + 1;
-    let task_results: Vec<Vec<Movement>> = pool.scope(|s| {
-        movements
-            .into_par_iter()
-            .chunks(movements_by_thread)
-            .map(|movements| {
-                let mut new_movements = Vec::new();
-                for movement in movements {
-                    movement
-                        .position
-                        .for_each_movement(movement.next_kind, |new_moviment| {
-                            if new_moviment.position == solved_position {
-                                print!("SOLVED!");
-                                exit(0);
-                            }
+/// Maximize score, then minimize depth, then minimize index
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct Enqueued {
+    score: u8,
+    depth: usize,
+    index: usize,
+}
 
-                            if seen_positions.insert(new_moviment.position) {
-                                new_movements.push(new_moviment);
-                            }
-                        });
-                }
-                new_movements
-            })
-            .collect()
+impl Ord for Enqueued {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.score
+            .cmp(&other.score)
+            .then(self.depth.cmp(&other.depth).reverse())
+            .then(self.index.cmp(&other.index))
+    }
+}
+
+impl PartialOrd for Enqueued {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SeenPositions {
+    map: BTreeMap<Position, usize>,
+    list: Vec<SeenPosition>,
+}
+
+#[derive(Debug, Clone)]
+struct SeenPosition {
+    parent: Option<usize>,
+    estimated_depth: u32,
+}
+
+impl SeenPositions {
+    fn new() -> Self {
+        SeenPositions {
+            map: BTreeMap::new(),
+            list: Vec::new(),
+        }
+    }
+
+    fn observe(&mut self, position: Position) {}
+}
+
+fn explore_simple(initial_position: Position) {
+    let solved_position = Position::solved();
+    let mut seen_positions = SeenPositions::new();
+    let mut queue = BinaryHeap::new();
+
+    let initial_movement = Movement {
+        position: initial_position,
+        next_kind: MovementKind::ALL,
+        change: MovementChange::Flip,
+    };
+    seen_positions.insert(
+        initial_position,
+        SeenPosition {
+            parent: None,
+            estimated_depth: 0,
+        },
+    );
+    queue.push(Enqueued {
+        score: initial_position.solved_score(),
+        depth: 0,
+        index: 0,
     });
 
-    let mut all_new_movements = Vec::with_capacity(task_results.iter().map(Vec::len).sum());
-    for new_movements in task_results {
-        all_new_movements.extend(new_movements);
+    let mut i = 0;
+    let mut solved = None;
+    while let Some(enqueued) = queue.pop() {
+        let next = all_movements[enqueued.index];
+
+        if next.movement.position == solved_position {
+            println!("Solved at {:?}", enqueued);
+            solved = Some(next);
+            break;
+        }
+
+        next.movement
+            .position
+            .for_each_movement(next.movement.next_kind, |new_movement| {
+                match seen_positions.entry(new_movement.position.as_bytes()) {
+                    Entry::Vacant(entry) => {
+                        entry.insert(todo!());
+                    }
+                    Entry::Occupied(entry) => {}
+                }
+
+                if seen_positions.insert(new_movement.position.as_bytes()) {
+                    let next_index = all_movements.len();
+                    all_movements.push(VisitedPosition {
+                        movement: new_movement,
+                        prev_index: Some(enqueued.index),
+                    });
+                    queue.push(Enqueued {
+                        score: new_movement.position.solved_score(),
+                        depth: enqueued.depth + 1,
+                        index: next_index,
+                    });
+                }
+            });
+
+        i += 1;
+
+        if i % 1_000_000 == 0 {
+            println!(
+                "Checked {} positions, {} distinct seen, {} in the queue, visited = {:?}",
+                format_big_int(i),
+                format_big_int(seen_positions.len()),
+                format_big_int(queue.len()),
+                enqueued
+            );
+        }
     }
-    all_new_movements
+
+    if let Some(mut solved) = solved {
+        let mut changes = Vec::new();
+        while let Some(prev_index) = solved.prev_index {
+            changes.push(solved.movement.change);
+            solved = all_movements[prev_index];
+        }
+        print!("Changes: {:?}", changes.iter().rev().format(", "));
+    }
 }
 
-impl fmt::Display for OuterLayer {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}|{}",
-            self.pieces[..OUTER_LAYER_HALF_PIECES]
-                .iter()
-                .filter(|p| p.can_split_before())
-                .format(","),
-            self.pieces[OUTER_LAYER_HALF_PIECES..]
-                .iter()
-                .filter(|p| p.can_split_before())
-                .format(",")
-        )
-    }
-}
-
-impl fmt::Display for OuterPiece {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let str = match self {
-            OuterPiece::WhiteRedBlue1 => "WRB",
-            OuterPiece::WhiteRedBlue2 => "",
-            OuterPiece::WhiteBlue => "WB",
-            OuterPiece::WhiteBlueOrange1 => "WBO",
-            OuterPiece::WhiteBlueOrange2 => "",
-            OuterPiece::WhiteOrange => "WO",
-            OuterPiece::WhiteOrangeGreen1 => "WOG",
-            OuterPiece::WhiteOrangeGreen2 => "",
-            OuterPiece::WhiteGreen => "WG",
-            OuterPiece::WhiteGreenRed1 => "WGR",
-            OuterPiece::WhiteGreenRed2 => "",
-            OuterPiece::WhiteRed => "WR",
-            OuterPiece::YellowOrange => "YO",
-            OuterPiece::YellowOrangeBlue1 => "YOB",
-            OuterPiece::YellowOrangeBlue2 => "",
-            OuterPiece::YellowBlue => "YB",
-            OuterPiece::YellowBlueRed1 => "YBR",
-            OuterPiece::YellowBlueRed2 => "",
-            OuterPiece::YellowRed => "YR",
-            OuterPiece::YellowRedGreen1 => "YRG",
-            OuterPiece::YellowRedGreen2 => "",
-            OuterPiece::YellowGreen => "YG",
-            OuterPiece::YellowGreenOrange1 => "YGO",
-            OuterPiece::YellowGreenOrange2 => "",
-            OuterPiece::Unknown => "*",
-        };
-        write!(f, "{}", str)
+fn format_big_int(n: usize) -> String {
+    if n < 1_000 {
+        format!("{}", n)
+    } else if n < 1_000_000 {
+        format!("{:.1}k", n as f64 / 1e3)
+    } else if n < 1_000_000_000 {
+        format!("{:.1}M", n as f64 / 1e6)
+    } else {
+        format!("{:.1}G", n as f64 / 1e9)
     }
 }

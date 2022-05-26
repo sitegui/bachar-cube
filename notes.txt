@@ -1,0 +1,24 @@
+Initial position 1
+
+no sort on index
+Solved at Enqueued { score: 25, depth: 42, index: 987983 }
+
+reverse sort on index
+Solved at Enqueued { score: 25, depth: 112, index: 98300059 }
+
+sort on index
+Solved at Enqueued { score: 25, depth: 107, index: 62660749 }
+
+Initial position 2
+
+sort +score -depth
+Solved at Enqueued { score: 25, depth: 75, index: 72288245 }
+
+sort +score -depth -index
+Solved at Enqueued { score: 25, depth: 101, index: 98984538 }
+
+sort +score -depth +index
+Solved at Enqueued { score: 25, depth: 75, index: 72578550 }
+
+sort +score
+Solved at Enqueued { score: 25, depth: 51237, index: 28622412 }
