@@ -1,0 +1,16 @@
+{
+  "name": "web3d",
+  "version": "1.0.0",
+  "dependencies": {
+    "three": "^0.141.0"
+  },
+  "devDependencies": {
+    "html-webpack-plugin": "^5.5.0",
+    "webpack": "^5.72.1",
+    "webpack-cli": "^4.9.2"
+  },
+  "scripts": {
+    "build": "webpack",
+    "watch": "webpack --watch"
+  }
+}

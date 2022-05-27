@@ -1,2 +1,4 @@
 /target
 /.idea
+/web3d/node_modules
+/web3d/dist
