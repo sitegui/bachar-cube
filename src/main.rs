@@ -1,10 +1,11 @@
 use crate::position::{Movement, MovementChange, MovementKind};
+use crate::prefix_set::PrefixSet;
 use itertools::Itertools;
 use outer_layer::OuterLayer;
 use outer_piece::OuterPiece;
 use position::Position;
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, BinaryHeap};
+use std::collections::{BTreeSet, BinaryHeap, HashSet};
 use std::error::Error;
 use std::time::Instant;
 
@@ -74,7 +75,7 @@ struct VisitedPosition {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct Enqueued {
     score: u8,
-    depth: u32,
+    depth: u16,
     index: u32,
 }
 
@@ -95,7 +96,7 @@ impl PartialOrd for Enqueued {
 
 fn explore_simple(initial_position: Position) {
     let solved_position = Position::solved();
-    let mut seen_positions = BTreeSet::new();
+    let mut seen_positions = HashSet::new();
     let mut all_movements = Vec::new();
     let mut queue = BinaryHeap::new();
 
@@ -154,6 +155,10 @@ fn explore_simple(initial_position: Position) {
                 format_big_int(queue.len()),
                 enqueued
             );
+        }
+
+        if i == 10_000_000 {
+            // break;
         }
     }
 

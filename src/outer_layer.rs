@@ -72,7 +72,7 @@ impl OuterLayer {
     }
 
     /// Return how many pieces are relatively well placed
-    pub fn solved_score(&self) -> u8 {
+    pub fn solved_score(self) -> u8 {
         self.solved_score
     }
 

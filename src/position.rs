@@ -7,16 +7,17 @@ pub struct Position {
     top: OuterLayer,
     middle_solved: bool,
     bottom: OuterLayer,
-    solved_score: u8,
 }
 
 /// Represents the allowed movements from this position
+///
+/// Bit 0 = can rotate top
+/// Bit 1 = can flip
+/// Bit 2 = can rotate bottom
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct MovementKind {
-    top: bool,
-    middle: bool,
-    bottom: bool,
-}
+pub struct MovementKind(u8);
+
+impl MovementKind {}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Movement {
@@ -41,7 +42,6 @@ impl Position {
             top,
             middle_solved,
             bottom,
-            solved_score,
         }
     }
 
@@ -85,43 +85,31 @@ impl Position {
     }
 
     pub fn for_each_movement(&self, kind: MovementKind, mut f: impl FnMut(Movement)) {
-        if kind.top {
+        if kind.rotate_top() {
             self.top.for_each_movement(|new_top, shift| {
                 let new_position = Position::with_layers(new_top, self.middle_solved, self.bottom);
                 f(Movement {
                     position: new_position,
-                    next_kind: MovementKind {
-                        top: false,
-                        middle: true,
-                        bottom: kind.bottom,
-                    },
+                    next_kind: MovementKind::new(false, true, kind.rotate_bottom()),
                     change: MovementChange::RotateTop(shift),
                 })
             });
         }
 
-        if kind.middle {
+        if kind.flip() {
             f(Movement {
                 position: self.flipped(),
-                next_kind: MovementKind {
-                    top: true,
-                    middle: false,
-                    bottom: true,
-                },
+                next_kind: MovementKind::new(true, false, true),
                 change: MovementChange::Flip,
             });
         }
 
-        if kind.bottom {
+        if kind.rotate_bottom() {
             self.bottom.for_each_movement(|new_bottom, shift| {
                 let new_position = Position::with_layers(self.top, self.middle_solved, new_bottom);
                 f(Movement {
                     position: new_position,
-                    next_kind: MovementKind {
-                        top: kind.top,
-                        middle: true,
-                        bottom: false,
-                    },
+                    next_kind: MovementKind::new(kind.rotate_top(), true, false),
                     change: MovementChange::RotateBottom(shift),
                 })
             });
@@ -145,11 +133,23 @@ impl Position {
 }
 
 impl MovementKind {
-    pub const ALL: MovementKind = MovementKind {
-        top: true,
-        middle: true,
-        bottom: true,
-    };
+    pub const ALL: MovementKind = MovementKind::new(true, true, true);
+
+    const fn new(rotate_top: bool, flip: bool, rotate_bottom: bool) -> Self {
+        MovementKind((rotate_top as u8) << 2 | (flip as u8) << 1 | (rotate_bottom as u8))
+    }
+
+    fn rotate_top(self) -> bool {
+        self.0 & 0b100 != 0
+    }
+
+    fn flip(self) -> bool {
+        self.0 & 0b10 != 0
+    }
+
+    fn rotate_bottom(self) -> bool {
+        self.0 & 0b1 != 0
+    }
 }
 
 impl fmt::Display for Position {
