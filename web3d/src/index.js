@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
-import node from "three/examples/jsm/nodes/core/Node";
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5);
@@ -9,15 +8,20 @@ const renderer = new THREE.WebGLRenderer({alpha: true});
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+const smallPieceAngle = Math.PI / 6;
+
 class Cube {
     constructor() {
-        const cubeSide = 1;
-        const smallPieceAngle = Math.PI / 6;
-        const halfSmallPieceSide = cubeSide * Math.tan(smallPieceAngle / 2) / 2;
-        const pieceHorizontalBevel = cubeSide / 20;
-        const pieceVerticalBevel = cubeSide / 15;
+        this.cubeSide = 1;
+        const halfSmallPieceSide = this.cubeSide * Math.tan(smallPieceAngle / 2) / 2;
+        const pieceHorizontalBevel = this.cubeSide / 20;
+        const pieceVerticalBevel = this.cubeSide / 15;
 
-        const pieceMaterial = new THREE.MeshStandardMaterial({color: '#333333', roughness: 0.25, metalness: 0});
+        const pieceMaterial = new THREE.MeshStandardMaterial({
+            color: '#333333',
+            roughness: 0.25,
+            metalness: 0,
+        });
 
         const whiteMaterial = new THREE.MeshStandardMaterial({color: 'white'});
         const yellowMaterial = new THREE.MeshStandardMaterial({color: 'yellow'});
@@ -28,45 +32,37 @@ class Cube {
             G: new THREE.MeshStandardMaterial({color: 'green'}),
         };
 
-        function buildSmallPiece(isTop, sideColor, rotateZ, translateZ) {
+        const buildSmallPiece = (isTop, sideColor) => {
             const name = (isTop ? 'W' : 'Y') + sideColor;
-            const topFaceMaterial = isTop ? whiteMaterial : pieceMaterial;
-            const bottomFaceMaterial = isTop ? pieceMaterial : yellowMaterial;
+            const topFaceMaterial = isTop ? whiteMaterial : yellowMaterial;
             const sideFaceMaterial = colorMaterials[sideColor];
-            const piece = new SmallPiece(halfSmallPieceSide, cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, bottomFaceMaterial, topFaceMaterial, sideFaceMaterial, name);
-            piece.mesh.rotateZ(rotateZ);
-            piece.mesh.translateZ(translateZ);
-            return piece;
-        }
+            return new SmallPiece(halfSmallPieceSide, this.cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, topFaceMaterial, sideFaceMaterial, name);
+        };
 
-        function buildBigPiece(isTop, side1Color, side2Color, rotateZ, translateZ) {
-            const name = (isTop ? 'W' : 'Y') + side1Color + side2Color;
-            const topFaceMaterial = isTop ? whiteMaterial : pieceMaterial;
-            const bottomFaceMaterial = isTop ? pieceMaterial : yellowMaterial;
-            const sideYFaceMaterial = isTop ? colorMaterials[side1Color] : colorMaterials[side2Color];
-            const sideXFaceMaterial = isTop ? colorMaterials[side2Color] : colorMaterials[side1Color];
-            const piece = new BigPiece(halfSmallPieceSide, cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, bottomFaceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial, name);
-            piece.mesh.rotateZ(rotateZ);
-            piece.mesh.translateZ(translateZ);
-            return piece;
-        }
+        const buildBigPiece = (isTop, sideYColor, sideXColor) => {
+            const name = (isTop ? 'W' : 'Y') + sideYColor + sideXColor;
+            const topFaceMaterial = isTop ? whiteMaterial : yellowMaterial;
+            const sideYFaceMaterial = colorMaterials[sideYColor];
+            const sideXFaceMaterial = colorMaterials[sideXColor];
+            return new BigPiece(halfSmallPieceSide, this.cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial, name);
+        };
 
-        function buildMiddlePiece(frontFaceMaterial, sideFaceMaterial, backFaceMaterial, rotateZ) {
-            const piece = new MiddlePiece(halfSmallPieceSide, cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, frontFaceMaterial, sideFaceMaterial, backFaceMaterial);
+        const buildMiddlePiece = (frontFaceMaterial, sideFaceMaterial, backFaceMaterial, rotateZ) => {
+            const piece = new MiddlePiece(halfSmallPieceSide, this.cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, frontFaceMaterial, sideFaceMaterial, backFaceMaterial);
             piece.mesh.rotateZ(rotateZ);
-            piece.mesh.translateZ(-cubeSide / 6);
+            piece.mesh.translateZ(-this.cubeSide / 6);
             return piece;
-        }
+        };
 
         this.topPieces = [
-            buildBigPiece(true, 'R', 'B', 0, cubeSide / 6),
-            buildSmallPiece(true, 'B', 3 * smallPieceAngle, cubeSide / 6),
-            buildBigPiece(true, 'B', 'O', 3 * smallPieceAngle, cubeSide / 6),
-            buildSmallPiece(true, 'O', 6 * smallPieceAngle, cubeSide / 6),
-            buildBigPiece(true, 'O', 'G', 6 * smallPieceAngle, cubeSide / 6),
-            buildSmallPiece(true, 'G', 9 * smallPieceAngle, cubeSide / 6),
-            buildBigPiece(true, 'G', 'R', 9 * smallPieceAngle, cubeSide / 6),
-            buildSmallPiece(true, 'R', 12 * smallPieceAngle, cubeSide / 6)
+            buildBigPiece(true, 'R', 'B'),
+            buildSmallPiece(true, 'B'),
+            buildBigPiece(true, 'B', 'O'),
+            buildSmallPiece(true, 'O'),
+            buildBigPiece(true, 'O', 'G'),
+            buildSmallPiece(true, 'G'),
+            buildBigPiece(true, 'G', 'R'),
+            buildSmallPiece(true, 'R'),
         ];
 
         this.middlePieces = [
@@ -75,14 +71,14 @@ class Cube {
         ];
 
         this.bottomPieces = [
-            buildSmallPiece(false, 'O', 6 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(false, 'O', 'B', 3 * smallPieceAngle, -cubeSide / 2),
-            buildSmallPiece(false, 'B', 3 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(false, 'B', 'R', 0, -cubeSide / 2),
-            buildSmallPiece(false, 'R', 12 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(false, 'R', 'G', 9 * smallPieceAngle, -cubeSide / 2),
-            buildSmallPiece(false, 'G', 9 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(false, 'G', 'O', 6 * smallPieceAngle, -cubeSide / 2),
+            buildSmallPiece(false, 'O'),
+            buildBigPiece(false, 'O', 'B'),
+            buildSmallPiece(false, 'B'),
+            buildBigPiece(false, 'B', 'R'),
+            buildSmallPiece(false, 'R'),
+            buildBigPiece(false, 'R', 'G'),
+            buildSmallPiece(false, 'G'),
+            buildBigPiece(false, 'G', 'O'),
         ];
 
         this.middleSolved = true;
@@ -100,6 +96,8 @@ class Cube {
 
         this._mixer = new THREE.AnimationMixer(this.mesh);
         this._isMoving = false;
+
+        this.setFromString('WRB,WB,WBO,WO|WOG,WG,WGR,WR true YO,YOB,YB,YBR|YR,YRG,YG,YGO');
     }
 
     async flip() {
@@ -190,7 +188,7 @@ class Cube {
         return piecesToString(this.topPieces) + ' ' + this.middleSolved + ' ' + piecesToString(this.bottomPieces);
     }
 
-    fromString(str) {
+    setFromString(str) {
         const [topStr, middleStr, bottomStr] = str.split(' ', 3);
         const allPieces = new Map();
         for (const piece of [...this.topPieces, ...this.bottomPieces]) {
@@ -204,6 +202,7 @@ class Cube {
                 if (!piece) {
                     throw new Error(`Invalid piece: ${name}`);
                 }
+                allPieces.delete(name);
                 newPieces.push(piece);
             }
             return newPieces;
@@ -219,10 +218,40 @@ class Cube {
         this.topPieces = newTopPieces;
         this.middleSolved = middleStr === 'true';
         this.bottomPieces = newBottomPieces;
+
+        let slot = 0;
+        for (const topPiece of this.topPieces) {
+            this._setPiecePosition(topPiece, true, slot);
+            slot += topPiece.size;
+        }
+        slot = 0;
+        for (const bottomPiece of this.bottomPieces) {
+            this._setPiecePosition(bottomPiece, false, slot);
+            slot += bottomPiece.size;
+        }
+
+        const middleMesh = this.middlePieces[0].mesh;
+        middleMesh.position.set(0, 0, -this.cubeSide / 6);
+        middleMesh.setRotationFromQuaternion(new THREE.Quaternion());
+        if (!this.middleSolved) {
+            middleMesh.rotateX(Math.PI);
+        }
     }
 
     animate(delta) {
         this._mixer.update(delta);
+    }
+
+    _setPiecePosition(piece, isTop, slot) {
+        const dz = isTop ? this.cubeSide / 6 : -this.cubeSide / 6;
+        piece.mesh.setRotationFromQuaternion(new THREE.Quaternion());
+        piece.mesh.position.set(0, 0, dz);
+        if (isTop) {
+            piece.mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), slot * Math.PI / 6);
+        } else {
+            piece.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI);
+            piece.mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), (slot-1) * Math.PI / 6);
+        }
     }
 
     /**
@@ -298,7 +327,7 @@ class Cube {
 }
 
 class SmallPiece {
-    constructor(halfSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, bottomFaceMaterial, topFaceMaterial, sideFaceMaterial, name) {
+    constructor(halfSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, topFaceMaterial, sideFaceMaterial, name) {
         const halfCubeSide = cubeSide / 2;
         const shape = new THREE.Shape();
         shape.moveTo(0, 0);
@@ -324,12 +353,14 @@ class SmallPiece {
         geometry.addGroup(halfFirstGroupCount, halfFirstGroupCount, 1);
         geometry.addGroup(2 * halfFirstGroupCount, geometryGroups[1].count, 2);
 
-        const piece = new THREE.Mesh(geometry, [bottomFaceMaterial, topFaceMaterial, mainMaterial]);
+        const piece = new THREE.Mesh(geometry, [mainMaterial, topFaceMaterial, mainMaterial]);
         piece.translateZ(verticalBevel);
+        piece.rotateZ(smallPieceAngle);
         group.add(piece);
 
         const sideFaceGeometry = new THREE.PlaneGeometry(2 * halfSide - 2 * horizontalBevel, sideHeight);
         const sideFace = new THREE.Mesh(sideFaceGeometry, sideFaceMaterial);
+        sideFace.rotateZ(smallPieceAngle);
         sideFace.rotateX(Math.PI / 2);
         sideFace.translateZ(halfCubeSide * 1.001);
         sideFace.translateY(halfCubeSide / 3);
@@ -343,7 +374,7 @@ class SmallPiece {
 }
 
 class BigPiece {
-    constructor(halfSmallPieceSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, bottomFaceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial, name) {
+    constructor(halfSmallPieceSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial, name) {
         const halfCubeSide = cubeSide / 2;
         const shape = new THREE.Shape();
         shape.moveTo(0, 0);
@@ -370,7 +401,7 @@ class BigPiece {
         geometry.addGroup(halfFirstGroupCount, halfFirstGroupCount, 1);
         geometry.addGroup(2 * halfFirstGroupCount, geometryGroups[1].count, 2);
 
-        const piece = new THREE.Mesh(geometry, [bottomFaceMaterial, topFaceMaterial, mainMaterial]);
+        const piece = new THREE.Mesh(geometry, [mainMaterial, topFaceMaterial, mainMaterial]);
         piece.translateZ(verticalBevel);
         group.add(piece);
 
@@ -453,6 +484,7 @@ class MiddlePiece {
 
 const cube = new Cube();
 scene.add(cube.mesh);
+cube.setFromString('YO,WG,WBO,WGR|YBR,WO,YGO,YG true WR,WRB,WB,WOG|YR,YRG,YOB,YB');
 
 camera.position.z = 3;
 
@@ -504,4 +536,7 @@ document.getElementById('rotateBottom1').onclick = () => {
 };
 document.getElementById('rotateBottom2').onclick = () => {
     cube.rotateBottom(2);
+};
+document.getElementById('reset').onclick = () => {
+    cube.setFromString('WRB,WB,WBO,WO|WOG,WG,WGR,WR true YO,YOB,YB,YBR|YR,YRG,YG,YGO');
 };

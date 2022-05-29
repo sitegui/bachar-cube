@@ -1,13 +1,10 @@
 use crate::position::{Movement, MovementChange, MovementKind};
-use crate::prefix_set::PrefixSet;
-use crate::priority_queue::PriorityQueue;
 use itertools::Itertools;
 use outer_layer::OuterLayer;
 use outer_piece::OuterPiece;
 use position::Position;
 use std::cmp::Ordering;
-use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
+use std::collections::{BTreeSet, BinaryHeap};
 use std::error::Error;
 use std::time::Instant;
 
@@ -53,10 +50,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let initial_position2 = Position {
         top: OuterLayer::new([
-            OuterPiece::WhiteOrange,
-            OuterPiece::YellowGreenOrange1,
-            OuterPiece::YellowGreenOrange2,
-            OuterPiece::YellowGreen,
             OuterPiece::YellowOrange,
             OuterPiece::WhiteGreen,
             OuterPiece::WhiteBlueOrange1,
@@ -65,6 +58,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             OuterPiece::WhiteGreenRed2,
             OuterPiece::YellowBlueRed1,
             OuterPiece::YellowBlueRed2,
+            OuterPiece::WhiteOrange,
+            OuterPiece::YellowGreenOrange1,
+            OuterPiece::YellowGreenOrange2,
+            OuterPiece::YellowGreen,
         ]),
         middle_solved: true,
         bottom: OuterLayer::new([
@@ -83,6 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ]),
     };
 
+    println!("{}", Position::solved());
     println!("{}", initial_position2);
     initial_position2.for_each_movement(MovementKind::ALL, |pos| {
         println!("{}", pos.position);
@@ -101,15 +99,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 #[derive(Debug, Clone, Copy)]
 struct VisitedPosition {
     movement: Movement,
-    prev_index: Option<usize>,
+    prev_index: Option<u32>,
 }
 
 /// Maximize score, then minimize depth, then minimize index
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct Enqueued {
     score: u8,
-    depth: usize,
-    index: usize,
+    depth: u32,
+    index: u32,
 }
 
 impl Ord for Enqueued {
@@ -127,32 +125,10 @@ impl PartialOrd for Enqueued {
     }
 }
 
-#[derive(Debug, Clone)]
-struct SeenPositions {
-    map: BTreeMap<Position, usize>,
-    list: Vec<SeenPosition>,
-}
-
-#[derive(Debug, Clone)]
-struct SeenPosition {
-    parent: Option<usize>,
-    estimated_depth: u32,
-}
-
-impl SeenPositions {
-    fn new() -> Self {
-        SeenPositions {
-            map: BTreeMap::new(),
-            list: Vec::new(),
-        }
-    }
-
-    fn observe(&mut self, position: Position) {}
-}
-
 fn explore_simple(initial_position: Position) {
     let solved_position = Position::solved();
-    let mut seen_positions = SeenPositions::new();
+    let mut seen_positions = BTreeSet::new();
+    let mut all_movements = Vec::new();
     let mut queue = BinaryHeap::new();
 
     let initial_movement = Movement {
@@ -160,13 +136,12 @@ fn explore_simple(initial_position: Position) {
         next_kind: MovementKind::ALL,
         change: MovementChange::Flip,
     };
-    seen_positions.insert(
-        initial_position,
-        SeenPosition {
-            parent: None,
-            estimated_depth: 0,
-        },
-    );
+    all_movements.push(VisitedPosition {
+        prev_index: None,
+        movement: initial_movement,
+    });
+    seen_positions.insert(initial_position);
+
     queue.push(Enqueued {
         score: initial_position.solved_score(),
         depth: 0,
@@ -176,7 +151,7 @@ fn explore_simple(initial_position: Position) {
     let mut i = 0;
     let mut solved = None;
     while let Some(enqueued) = queue.pop() {
-        let next = all_movements[enqueued.index];
+        let next = all_movements[enqueued.index as usize];
 
         if next.movement.position == solved_position {
             println!("Solved at {:?}", enqueued);
@@ -187,15 +162,8 @@ fn explore_simple(initial_position: Position) {
         next.movement
             .position
             .for_each_movement(next.movement.next_kind, |new_movement| {
-                match seen_positions.entry(new_movement.position.as_bytes()) {
-                    Entry::Vacant(entry) => {
-                        entry.insert(todo!());
-                    }
-                    Entry::Occupied(entry) => {}
-                }
-
-                if seen_positions.insert(new_movement.position.as_bytes()) {
-                    let next_index = all_movements.len();
+                if seen_positions.insert(new_movement.position) {
+                    let next_index = all_movements.len() as u32;
                     all_movements.push(VisitedPosition {
                         movement: new_movement,
                         prev_index: Some(enqueued.index),
@@ -225,7 +193,7 @@ fn explore_simple(initial_position: Position) {
         let mut changes = Vec::new();
         while let Some(prev_index) = solved.prev_index {
             changes.push(solved.movement.change);
-            solved = all_movements[prev_index];
+            solved = all_movements[prev_index as usize];
         }
         print!("Changes: {:?}", changes.iter().rev().format(", "));
     }

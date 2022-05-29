@@ -1,7 +1,6 @@
 use crate::outer_layer::{OuterLayer, OUTER_LAYER_PIECES};
 use crate::outer_piece::OuterPiece;
 use std::fmt;
-use std::ops::ControlFlow;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]
 pub struct Position {

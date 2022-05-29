@@ -1,6 +1,5 @@
 use crate::OuterPiece;
 use itertools::Itertools;
-use std::ops::ControlFlow;
 use std::{fmt, mem};
 
 #[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]

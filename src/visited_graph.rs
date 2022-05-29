@@ -18,10 +18,12 @@ pub struct VisitedPosition {
 impl VisitedGraph {
     pub fn new() -> Self {
         VisitedGraph {
-            graph: UnGraph::new(),
+            graph: UnGraph::default(),
             position_indexes: BTreeMap::new(),
         }
     }
 
-    pub fn observe(&mut self, value: VisitedPosition) -> u32 {}
+    pub fn observe(&mut self, value: VisitedPosition) -> u32 {
+        todo!()
+    }
 }
