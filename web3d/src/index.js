@@ -45,8 +45,7 @@ class Cube {
             return piece;
         }
 
-        this.pieces = [
-            // Top pieces
+        this.topPieces = [
             buildBigPiece(pieceMaterial, whiteMaterial, redMaterial, blueMaterial, 0, cubeSide / 6),
             buildSmallPiece(pieceMaterial, whiteMaterial, blueMaterial, 3 * smallPieceAngle, cubeSide / 6),
             buildBigPiece(pieceMaterial, whiteMaterial, blueMaterial, orangeMaterial, 3 * smallPieceAngle, cubeSide / 6),
@@ -54,25 +53,76 @@ class Cube {
             buildBigPiece(pieceMaterial, whiteMaterial, orangeMaterial, greenMaterial, 6 * smallPieceAngle, cubeSide / 6),
             buildSmallPiece(pieceMaterial, whiteMaterial, greenMaterial, 9 * smallPieceAngle, cubeSide / 6),
             buildBigPiece(pieceMaterial, whiteMaterial, greenMaterial, redMaterial, 9 * smallPieceAngle, cubeSide / 6),
-            buildSmallPiece(pieceMaterial, whiteMaterial, redMaterial, 12 * smallPieceAngle, cubeSide / 6),
-            // Middle pieces
+            buildSmallPiece(pieceMaterial, whiteMaterial, redMaterial, 12 * smallPieceAngle, cubeSide / 6)
+        ];
+
+        this.middlePieces = [
             buildMiddlePiece(redMaterial, blueMaterial, orangeMaterial, 0),
             buildMiddlePiece(orangeMaterial, greenMaterial, redMaterial, Math.PI),
-            // Bottom pieces
-            buildBigPiece(yellowMaterial, pieceMaterial, redMaterial, blueMaterial, 0, -cubeSide / 2),
-            buildSmallPiece(yellowMaterial, pieceMaterial, blueMaterial, 3 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(yellowMaterial, pieceMaterial, blueMaterial, orangeMaterial, 3 * smallPieceAngle, -cubeSide / 2),
+        ];
+
+        this.bottomPieces = [
             buildSmallPiece(yellowMaterial, pieceMaterial, orangeMaterial, 6 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(yellowMaterial, pieceMaterial, orangeMaterial, greenMaterial, 6 * smallPieceAngle, -cubeSide / 2),
-            buildSmallPiece(yellowMaterial, pieceMaterial, greenMaterial, 9 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(yellowMaterial, pieceMaterial, greenMaterial, redMaterial, 9 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(yellowMaterial, pieceMaterial, blueMaterial, orangeMaterial, 3 * smallPieceAngle, -cubeSide / 2),
+            buildSmallPiece(yellowMaterial, pieceMaterial, blueMaterial, 3 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(yellowMaterial, pieceMaterial, redMaterial, blueMaterial, 0, -cubeSide / 2),
             buildSmallPiece(yellowMaterial, pieceMaterial, redMaterial, 12 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(yellowMaterial, pieceMaterial, greenMaterial, redMaterial, 9 * smallPieceAngle, -cubeSide / 2),
+            buildSmallPiece(yellowMaterial, pieceMaterial, greenMaterial, 9 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(yellowMaterial, pieceMaterial, orangeMaterial, greenMaterial, 6 * smallPieceAngle, -cubeSide / 2),
         ];
 
         this.mesh = new THREE.Group();
-        for (const piece of this.pieces) {
+        for (const piece of this.topPieces) {
             this.mesh.add(piece.mesh);
         }
+        for (const piece of this.middlePieces) {
+            this.mesh.add(piece.mesh);
+        }
+        for (const piece of this.bottomPieces) {
+            this.mesh.add(piece.mesh);
+        }
+    }
+
+    flip() {
+        const [flipTop, stayTop] = this._split(this.topPieces);
+        const [flipBottom, stayBottom] = this._split(this.bottomPieces);
+
+        const flipGroup = new THREE.Group();
+        this.mesh.add(flipGroup);
+        for (const piece of flipTop) {
+            flipGroup.attach(piece.mesh);
+        }
+        flipGroup.attach(this.middlePieces[0].mesh);
+        for (const piece of flipBottom) {
+            flipGroup.attach(piece.mesh);
+        }
+
+        const angle = Math.PI / 12;
+        const axis = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
+        flipGroup.rotateOnAxis(axis, Math.PI);
+
+        for (const pieceMesh of flipGroup.children.slice()) {
+            this.mesh.attach(pieceMesh);
+        }
+    }
+
+    /**
+     * Split the pieces into the first and second half
+     * @param pieces
+     * @private
+     */
+    _split(pieces) {
+        let totalSize = 0;
+
+        for (const [i, piece] of pieces.entries()) {
+            totalSize += piece.size;
+            if (totalSize === 6) {
+                return [pieces.slice(0, i + 1), pieces.slice(i + 1)];
+            }
+        }
+
+        throw Error('There must be a prefix that adds up to 6');
     }
 }
 
@@ -115,6 +165,8 @@ class SmallPiece {
         group.add(sideFace);
 
         this.mesh = group;
+
+        this.size = 1;
     }
 }
 
@@ -169,6 +221,8 @@ class BigPiece {
         group.add(sideXFace);
 
         this.mesh = group;
+
+        this.size = 2;
     }
 }
 
@@ -234,7 +288,7 @@ camera.position.z = 3;
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.minDistance = 0.5;
 controls.maxDistance = 3;
-controls.maxPolarAngle = Math.PI;
+controls.maxPolarAngle = 3 * Math.PI / 2;
 
 // ambient light
 
@@ -260,12 +314,17 @@ scene.add(new THREE.AmbientLight('white'));
 // helper
 
 cube.mesh.add(new THREE.AxesHelper(20));
+scene.add(new THREE.AxesHelper(10));
 
 function animate() {
     requestAnimationFrame(animate);
-    cube.mesh.rotation.z -= 0.01;
-    cube.mesh.rotation.x -= 0.003;
+    // cube.mesh.rotation.z -= 0.003;
+    // cube.mesh.rotation.x -= 0.001;
     renderer.render(scene, camera);
 }
 
 animate();
+
+document.getElementById('flip').onclick = () => {
+    cube.flip();
+};
