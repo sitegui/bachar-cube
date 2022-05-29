@@ -16,40 +16,8 @@ mod priority_queue;
 mod visited_graph;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let initial_position = Position {
-        top: OuterLayer::new([
-            OuterPiece::YellowGreenOrange1,
-            OuterPiece::YellowGreenOrange2,
-            OuterPiece::WhiteRed,
-            OuterPiece::WhiteRedBlue1,
-            OuterPiece::WhiteRedBlue2,
-            OuterPiece::WhiteBlue,
-            OuterPiece::YellowBlueRed1,
-            OuterPiece::YellowBlueRed2,
-            OuterPiece::YellowRedGreen1,
-            OuterPiece::YellowRedGreen2,
-            OuterPiece::WhiteGreen,
-            OuterPiece::YellowRed,
-        ]),
-        middle_solved: true,
-        bottom: OuterLayer::new([
-            OuterPiece::YellowGreen,
-            OuterPiece::YellowOrange,
-            OuterPiece::YellowOrangeBlue1,
-            OuterPiece::YellowOrangeBlue2,
-            OuterPiece::YellowBlue,
-            OuterPiece::WhiteOrange,
-            OuterPiece::WhiteGreenRed1,
-            OuterPiece::WhiteGreenRed2,
-            OuterPiece::WhiteBlueOrange1,
-            OuterPiece::WhiteBlueOrange2,
-            OuterPiece::WhiteOrangeGreen1,
-            OuterPiece::WhiteOrangeGreen2,
-        ]),
-    };
-
-    let initial_position2 = Position {
-        top: OuterLayer::new([
+    let initial_position = Position::with_layers(
+        OuterLayer::new([
             OuterPiece::YellowOrange,
             OuterPiece::WhiteGreen,
             OuterPiece::WhiteBlueOrange1,
@@ -63,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             OuterPiece::YellowGreenOrange2,
             OuterPiece::YellowGreen,
         ]),
-        middle_solved: true,
-        bottom: OuterLayer::new([
+        true,
+        OuterLayer::new([
             OuterPiece::WhiteRed,
             OuterPiece::WhiteRedBlue1,
             OuterPiece::WhiteRedBlue2,
@@ -78,11 +46,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             OuterPiece::YellowOrangeBlue2,
             OuterPiece::YellowBlue,
         ]),
-    };
+    );
 
     println!("{}", Position::solved());
-    println!("{}", initial_position2);
-    initial_position2.for_each_movement(MovementKind::ALL, |pos| {
+    println!("{}", initial_position);
+    initial_position.for_each_movement(MovementKind::ALL, |pos| {
         println!("{}", pos.position);
     });
 
@@ -90,8 +58,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let seen_positions = DashSet::new();
 
     let start = Instant::now();
-    explore_simple(initial_position2);
-    eprintln!("start.elapsed() = {:?}", start.elapsed());
+    explore_simple(initial_position);
+    println!("start.elapsed() = {:?}", start.elapsed());
 
     Ok(())
 }
@@ -140,7 +108,7 @@ fn explore_simple(initial_position: Position) {
         prev_index: None,
         movement: initial_movement,
     });
-    seen_positions.insert(initial_position);
+    seen_positions.insert(initial_position.as_bytes());
 
     queue.push(Enqueued {
         score: initial_position.solved_score(),
@@ -162,7 +130,7 @@ fn explore_simple(initial_position: Position) {
         next.movement
             .position
             .for_each_movement(next.movement.next_kind, |new_movement| {
-                if seen_positions.insert(new_movement.position) {
+                if seen_positions.insert(new_movement.position.as_bytes()) {
                     let next_index = all_movements.len() as u32;
                     all_movements.push(VisitedPosition {
                         movement: new_movement,
@@ -195,7 +163,7 @@ fn explore_simple(initial_position: Position) {
             changes.push(solved.movement.change);
             solved = all_movements[prev_index as usize];
         }
-        print!("Changes: {:?}", changes.iter().rev().format(", "));
+        println!("Changes: {:?}", changes.iter().rev().format(", "));
     }
 }
 

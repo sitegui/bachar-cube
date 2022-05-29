@@ -4,9 +4,10 @@ use std::fmt;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]
 pub struct Position {
-    pub top: OuterLayer,
-    pub middle_solved: bool,
-    pub bottom: OuterLayer,
+    top: OuterLayer,
+    middle_solved: bool,
+    bottom: OuterLayer,
+    solved_score: u8,
 }
 
 /// Represents the allowed movements from this position
@@ -34,9 +35,19 @@ pub enum MovementChange {
 impl Position {
     pub const MAX_SOLVED_SCORE: u8 = 25;
 
-    pub fn solved() -> Position {
+    pub fn with_layers(top: OuterLayer, middle_solved: bool, bottom: OuterLayer) -> Self {
+        let solved_score = top.solved_score() + middle_solved as u8 + bottom.solved_score();
         Position {
-            top: OuterLayer::new([
+            top,
+            middle_solved,
+            bottom,
+            solved_score,
+        }
+    }
+
+    pub fn solved() -> Position {
+        Position::with_layers(
+            OuterLayer::new([
                 OuterPiece::WhiteRedBlue1,
                 OuterPiece::WhiteRedBlue2,
                 OuterPiece::WhiteBlue,
@@ -50,8 +61,8 @@ impl Position {
                 OuterPiece::WhiteGreenRed2,
                 OuterPiece::WhiteRed,
             ]),
-            middle_solved: true,
-            bottom: OuterLayer::new([
+            true,
+            OuterLayer::new([
                 OuterPiece::YellowOrange,
                 OuterPiece::YellowOrangeBlue1,
                 OuterPiece::YellowOrangeBlue2,
@@ -65,26 +76,18 @@ impl Position {
                 OuterPiece::YellowGreenOrange1,
                 OuterPiece::YellowGreenOrange2,
             ]),
-        }
+        )
     }
 
     pub fn flipped(self) -> Self {
         let (flipped_top, flipped_bottom) = self.top.flip(self.bottom);
-        Position {
-            top: flipped_top,
-            middle_solved: !self.middle_solved,
-            bottom: flipped_bottom,
-        }
+        Position::with_layers(flipped_top, !self.middle_solved, flipped_bottom)
     }
 
     pub fn for_each_movement(&self, kind: MovementKind, mut f: impl FnMut(Movement)) {
         if kind.top {
             self.top.for_each_movement(|new_top, shift| {
-                let new_position = Position {
-                    top: new_top,
-                    middle_solved: self.middle_solved,
-                    bottom: self.bottom,
-                };
+                let new_position = Position::with_layers(new_top, self.middle_solved, self.bottom);
                 f(Movement {
                     position: new_position,
                     next_kind: MovementKind {
@@ -111,11 +114,7 @@ impl Position {
 
         if kind.bottom {
             self.bottom.for_each_movement(|new_bottom, shift| {
-                let new_position = Position {
-                    top: self.top,
-                    middle_solved: self.middle_solved,
-                    bottom: new_bottom,
-                };
+                let new_position = Position::with_layers(self.top, self.middle_solved, new_bottom);
                 f(Movement {
                     position: new_position,
                     next_kind: MovementKind {

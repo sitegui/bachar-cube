@@ -5,6 +5,7 @@ use std::{fmt, mem};
 #[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]
 pub struct OuterLayer {
     pieces: [OuterPiece; OUTER_LAYER_PIECES],
+    solved_score: u8,
 }
 
 pub const OUTER_LAYER_PIECES: usize = 12;
@@ -15,7 +16,10 @@ impl OuterLayer {
         assert!(pieces[0].can_split_before());
         assert!(pieces[OUTER_LAYER_HALF_PIECES].can_split_before());
 
-        OuterLayer { pieces }
+        OuterLayer {
+            pieces,
+            solved_score: Self::calculate_solved_score(pieces),
+        }
     }
 
     pub fn for_each_movement(self, mut f: impl FnMut(Self, u8)) {
@@ -23,7 +27,13 @@ impl OuterLayer {
             let mut new_pieces = [OuterPiece::Unknown; OUTER_LAYER_PIECES];
             new_pieces[..OUTER_LAYER_PIECES - shift].copy_from_slice(&self.pieces[shift..]);
             new_pieces[OUTER_LAYER_PIECES - shift..].copy_from_slice(&self.pieces[..shift]);
-            f(OuterLayer { pieces: new_pieces }, shift as u8);
+            f(
+                OuterLayer {
+                    pieces: new_pieces,
+                    solved_score: self.solved_score,
+                },
+                shift as u8,
+            );
         };
 
         // Shift of 6 is always possible
@@ -52,20 +62,26 @@ impl OuterLayer {
         (
             OuterLayer {
                 pieces: new_self_pieces,
+                solved_score: Self::calculate_solved_score(new_self_pieces),
             },
             OuterLayer {
                 pieces: new_other_pieces,
+                solved_score: Self::calculate_solved_score(new_other_pieces),
             },
         )
     }
 
     /// Return how many pieces are relatively well placed
-    pub fn solved_score(self) -> u8 {
+    pub fn solved_score(&self) -> u8 {
+        self.solved_score
+    }
+
+    fn calculate_solved_score(pieces: [OuterPiece; OUTER_LAYER_PIECES]) -> u8 {
         let mut score = 0;
         for i in 1..OUTER_LAYER_PIECES {
-            score += self.pieces[i - 1].is_followed_by(self.pieces[i]) as u8;
+            score += pieces[i - 1].is_followed_by(pieces[i]) as u8;
         }
-        score += self.pieces[OUTER_LAYER_PIECES - 1].is_followed_by(self.pieces[0]) as u8;
+        score += pieces[OUTER_LAYER_PIECES - 1].is_followed_by(pieces[0]) as u8;
         score
     }
 
