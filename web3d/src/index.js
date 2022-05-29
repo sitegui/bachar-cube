@@ -28,7 +28,7 @@ class Cube {
         const colorMaterials = {
             R: new THREE.MeshStandardMaterial({color: 'red'}),
             B: new THREE.MeshStandardMaterial({color: 'blue'}),
-            O: new THREE.MeshStandardMaterial({color: 'orange'}),
+            O: new THREE.MeshStandardMaterial({color: 'darkorange'}),
             G: new THREE.MeshStandardMaterial({color: 'green'}),
         };
 
@@ -238,6 +238,22 @@ class Cube {
         }
     }
 
+    async applyMovementsFromStr(str) {
+        const movements = str.split(', ');
+        for (const movement of movements) {
+            const match = movement.match(/^(?:(Flip)|RotateTop\((\d+)\)|RotateBottom\((\d+)\))$/);
+            if (!match) {
+                throw new Error(`Invalid movement: {movement}`);
+            } else if (match[1]) {
+                await this.flip();
+            } else if (match[2]) {
+                await this.rotateTop(Number.parseInt(match[2]));
+            } else if (match[3]) {
+                await this.rotateBottom(Number.parseInt(match[3]));
+            }
+        }
+    }
+
     animate(delta) {
         this._mixer.update(delta);
     }
@@ -250,7 +266,7 @@ class Cube {
             piece.mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), slot * Math.PI / 6);
         } else {
             piece.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI);
-            piece.mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), (slot-1) * Math.PI / 6);
+            piece.mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), (slot - 1) * Math.PI / 6);
         }
     }
 
@@ -486,6 +502,7 @@ const cube = new Cube();
 scene.add(cube.mesh);
 cube.setFromString('YO,WG,WBO,WGR|YBR,WO,YGO,YG true WR,WRB,WB,WOG|YR,YRG,YOB,YB');
 
+cube.mesh.rotation.x = Math.PI / 2;
 camera.position.z = 3;
 
 // controls
@@ -499,7 +516,7 @@ scene.add(new THREE.AmbientLight('white'));
 
 {
     const color = 0xFFFFFF;
-    const intensity = 1;
+    const intensity = 0.5;
     const light = new THREE.DirectionalLight(color, intensity);
     light.position.set(-1, 2, 6);
     scene.add(light);
@@ -514,8 +531,8 @@ const clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
-    cube.mesh.rotation.z -= 0.003;
-    cube.mesh.rotation.x -= 0.001;
+    cube.mesh.rotation.z -= 0.01;
+    cube.mesh.rotation.x -= 0.003;
     cube.animate(clock.getDelta());
     renderer.render(scene, camera);
 }
@@ -539,4 +556,23 @@ document.getElementById('rotateBottom2').onclick = () => {
 };
 document.getElementById('reset').onclick = () => {
     cube.setFromString('WRB,WB,WBO,WO|WOG,WG,WGR,WR true YO,YOB,YB,YBR|YR,YRG,YG,YGO');
+};
+document.getElementById('solve').onclick = () => {
+    cube.applyMovementsFromStr('RotateBottom(6), Flip, RotateBottom(1), RotateTop(3), Flip, RotateBottom(11), Flip, ' +
+        'RotateBottom(7), Flip, RotateTop(3), Flip, RotateBottom(5), Flip, RotateBottom(4), RotateTop(9), Flip, ' +
+        'RotateTop(3), Flip, RotateTop(9), Flip, RotateBottom(2), Flip, RotateTop(1), Flip, RotateTop(11), Flip, ' +
+        'RotateTop(9), Flip, RotateTop(10), Flip, RotateBottom(6), Flip, RotateBottom(3), RotateTop(10), Flip, ' +
+        'RotateBottom(2), Flip, RotateBottom(5), RotateTop(10), Flip, RotateTop(2), Flip, RotateTop(5), Flip, ' +
+        'RotateTop(10), Flip, RotateTop(9), Flip, RotateTop(2), Flip, RotateBottom(4), Flip, RotateBottom(3), ' +
+        'Flip, RotateTop(9), Flip, RotateTop(3), Flip, RotateBottom(11), Flip, RotateBottom(7), RotateTop(7), ' +
+        'Flip, RotateBottom(5), Flip, RotateBottom(5), Flip, RotateBottom(7), Flip, RotateBottom(2), Flip, ' +
+        'RotateBottom(5), RotateTop(8), Flip, RotateTop(10), Flip, RotateBottom(3), Flip, RotateTop(1), Flip, ' +
+        'RotateTop(9), Flip, RotateBottom(3), Flip, RotateBottom(5), Flip, RotateBottom(9), Flip, RotateTop(9), Flip, ' +
+        'RotateBottom(3), Flip, RotateBottom(9), Flip, RotateBottom(6), RotateTop(4)');
+};
+document.getElementById('fast').onclick = () => {
+    cube._mixer.timeScale = 4;
+};
+document.getElementById('slow').onclick = () => {
+    cube._mixer.timeScale = 1;
 };
