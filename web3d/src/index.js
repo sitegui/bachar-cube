@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
+import node from "three/examples/jsm/nodes/core/Node";
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5);
@@ -17,22 +18,34 @@ class Cube {
         const pieceVerticalBevel = cubeSide / 15;
 
         const pieceMaterial = new THREE.MeshStandardMaterial({color: '#333333', roughness: 0.25, metalness: 0});
-        const whiteMaterial = new THREE.MeshStandardMaterial({color: 'white'});
-        const redMaterial = new THREE.MeshStandardMaterial({color: 'red'});
-        const blueMaterial = new THREE.MeshStandardMaterial({color: 'blue'});
-        const orangeMaterial = new THREE.MeshStandardMaterial({color: 'orange'});
-        const greenMaterial = new THREE.MeshStandardMaterial({color: 'green'});
-        const yellowMaterial = new THREE.MeshStandardMaterial({color: 'yellow'});
 
-        function buildSmallPiece(bottomFaceMaterial, topFaceMaterial, sideFaceMaterial, rotateZ, translateZ) {
-            const piece = new SmallPiece(halfSmallPieceSide, cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, bottomFaceMaterial, topFaceMaterial, sideFaceMaterial);
+        const whiteMaterial = new THREE.MeshStandardMaterial({color: 'white'});
+        const yellowMaterial = new THREE.MeshStandardMaterial({color: 'yellow'});
+        const colorMaterials = {
+            R: new THREE.MeshStandardMaterial({color: 'red'}),
+            B: new THREE.MeshStandardMaterial({color: 'blue'}),
+            O: new THREE.MeshStandardMaterial({color: 'orange'}),
+            G: new THREE.MeshStandardMaterial({color: 'green'}),
+        };
+
+        function buildSmallPiece(isTop, sideColor, rotateZ, translateZ) {
+            const name = (isTop ? 'W' : 'Y') + sideColor;
+            const topFaceMaterial = isTop ? whiteMaterial : pieceMaterial;
+            const bottomFaceMaterial = isTop ? pieceMaterial : yellowMaterial;
+            const sideFaceMaterial = colorMaterials[sideColor];
+            const piece = new SmallPiece(halfSmallPieceSide, cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, bottomFaceMaterial, topFaceMaterial, sideFaceMaterial, name);
             piece.mesh.rotateZ(rotateZ);
             piece.mesh.translateZ(translateZ);
             return piece;
         }
 
-        function buildBigPiece(bottomFaceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial, rotateZ, translateZ) {
-            const piece = new BigPiece(halfSmallPieceSide, cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, bottomFaceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial);
+        function buildBigPiece(isTop, side1Color, side2Color, rotateZ, translateZ) {
+            const name = (isTop ? 'W' : 'Y') + side1Color + side2Color;
+            const topFaceMaterial = isTop ? whiteMaterial : pieceMaterial;
+            const bottomFaceMaterial = isTop ? pieceMaterial : yellowMaterial;
+            const sideYFaceMaterial = isTop ? colorMaterials[side1Color] : colorMaterials[side2Color];
+            const sideXFaceMaterial = isTop ? colorMaterials[side2Color] : colorMaterials[side1Color];
+            const piece = new BigPiece(halfSmallPieceSide, cubeSide, pieceVerticalBevel, pieceHorizontalBevel, pieceMaterial, bottomFaceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial, name);
             piece.mesh.rotateZ(rotateZ);
             piece.mesh.translateZ(translateZ);
             return piece;
@@ -46,31 +59,33 @@ class Cube {
         }
 
         this.topPieces = [
-            buildBigPiece(pieceMaterial, whiteMaterial, redMaterial, blueMaterial, 0, cubeSide / 6),
-            buildSmallPiece(pieceMaterial, whiteMaterial, blueMaterial, 3 * smallPieceAngle, cubeSide / 6),
-            buildBigPiece(pieceMaterial, whiteMaterial, blueMaterial, orangeMaterial, 3 * smallPieceAngle, cubeSide / 6),
-            buildSmallPiece(pieceMaterial, whiteMaterial, orangeMaterial, 6 * smallPieceAngle, cubeSide / 6),
-            buildBigPiece(pieceMaterial, whiteMaterial, orangeMaterial, greenMaterial, 6 * smallPieceAngle, cubeSide / 6),
-            buildSmallPiece(pieceMaterial, whiteMaterial, greenMaterial, 9 * smallPieceAngle, cubeSide / 6),
-            buildBigPiece(pieceMaterial, whiteMaterial, greenMaterial, redMaterial, 9 * smallPieceAngle, cubeSide / 6),
-            buildSmallPiece(pieceMaterial, whiteMaterial, redMaterial, 12 * smallPieceAngle, cubeSide / 6)
+            buildBigPiece(true, 'R', 'B', 0, cubeSide / 6),
+            buildSmallPiece(true, 'B', 3 * smallPieceAngle, cubeSide / 6),
+            buildBigPiece(true, 'B', 'O', 3 * smallPieceAngle, cubeSide / 6),
+            buildSmallPiece(true, 'O', 6 * smallPieceAngle, cubeSide / 6),
+            buildBigPiece(true, 'O', 'G', 6 * smallPieceAngle, cubeSide / 6),
+            buildSmallPiece(true, 'G', 9 * smallPieceAngle, cubeSide / 6),
+            buildBigPiece(true, 'G', 'R', 9 * smallPieceAngle, cubeSide / 6),
+            buildSmallPiece(true, 'R', 12 * smallPieceAngle, cubeSide / 6)
         ];
 
         this.middlePieces = [
-            buildMiddlePiece(redMaterial, blueMaterial, orangeMaterial, 0),
-            buildMiddlePiece(orangeMaterial, greenMaterial, redMaterial, Math.PI),
+            buildMiddlePiece(colorMaterials.R, colorMaterials.B, colorMaterials.O, 0),
+            buildMiddlePiece(colorMaterials.O, colorMaterials.G, colorMaterials.R, Math.PI),
         ];
 
         this.bottomPieces = [
-            buildSmallPiece(yellowMaterial, pieceMaterial, orangeMaterial, 6 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(yellowMaterial, pieceMaterial, blueMaterial, orangeMaterial, 3 * smallPieceAngle, -cubeSide / 2),
-            buildSmallPiece(yellowMaterial, pieceMaterial, blueMaterial, 3 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(yellowMaterial, pieceMaterial, redMaterial, blueMaterial, 0, -cubeSide / 2),
-            buildSmallPiece(yellowMaterial, pieceMaterial, redMaterial, 12 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(yellowMaterial, pieceMaterial, greenMaterial, redMaterial, 9 * smallPieceAngle, -cubeSide / 2),
-            buildSmallPiece(yellowMaterial, pieceMaterial, greenMaterial, 9 * smallPieceAngle, -cubeSide / 2),
-            buildBigPiece(yellowMaterial, pieceMaterial, orangeMaterial, greenMaterial, 6 * smallPieceAngle, -cubeSide / 2),
+            buildSmallPiece(false, 'O', 6 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(false, 'O', 'B', 3 * smallPieceAngle, -cubeSide / 2),
+            buildSmallPiece(false, 'B', 3 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(false, 'B', 'R', 0, -cubeSide / 2),
+            buildSmallPiece(false, 'R', 12 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(false, 'R', 'G', 9 * smallPieceAngle, -cubeSide / 2),
+            buildSmallPiece(false, 'G', 9 * smallPieceAngle, -cubeSide / 2),
+            buildBigPiece(false, 'G', 'O', 6 * smallPieceAngle, -cubeSide / 2),
         ];
+
+        this.middleSolved = true;
 
         this.mesh = new THREE.Group();
         for (const piece of this.topPieces) {
@@ -87,58 +102,123 @@ class Cube {
         this._isMoving = false;
     }
 
-    flip() {
+    async flip() {
         if (this._isMoving) {
-            throw Error('Only one movement can be applied at a time');
+            throw new Error('Only one movement can be applied at a time');
         }
         this._isMoving = true;
 
+        // Update internal representation
         const [flipTop, stayTop] = this._split(this.topPieces);
         const [flipBottom, stayBottom] = this._split(this.bottomPieces);
+        this.topPieces = [...flipBottom, ...stayTop];
+        this.bottomPieces = [...flipTop, ...stayBottom];
+        this.middleSolved = !this.middleSolved;
 
-        const flipGroup = new THREE.Group();
-        this.mesh.add(flipGroup);
-        for (const piece of flipTop) {
-            flipGroup.attach(piece.mesh);
-        }
-        flipGroup.attach(this.middlePieces[0].mesh);
-        for (const piece of flipBottom) {
-            flipGroup.attach(piece.mesh);
-        }
+        const pieces = [...flipTop, this.middlePieces[0], ...flipBottom];
 
-        const initialQuaternion = new THREE.Quaternion();
         const angle = Math.PI / 12;
         const axis = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
-        const finalQuaternion = initialQuaternion.clone();
+        const finalQuaternion = new THREE.Quaternion();
         finalQuaternion.setFromAxisAngle(axis, Math.PI);
 
-        const rotationTrack = new THREE.QuaternionKeyframeTrack('.quaternion', [0, 1], [
-            initialQuaternion.x,
-            initialQuaternion.y,
-            initialQuaternion.z,
-            initialQuaternion.w,
-            finalQuaternion.x,
-            finalQuaternion.y,
-            finalQuaternion.z,
-            finalQuaternion.w,
-        ]);
+        await this._animateAndWait(pieces, finalQuaternion);
+        this._isMoving = false;
+    }
 
-        const animationClip = new THREE.AnimationClip('flip', 1, [rotationTrack]);
-        const action = this._mixer.clipAction(animationClip, flipGroup);
-        action.setLoop(THREE.LoopOnce, 0);
+    async rotateTop(steps) {
+        await this._rotateTopOrBottom(this.topPieces, -1, steps)
+    }
 
-        const finishMovement = () => {
+    async rotateBottom(steps) {
+        await this._rotateTopOrBottom(this.bottomPieces, 1, steps)
+    }
+
+    async _rotateTopOrBottom(layerPieces, direction, steps) {
+        if (this._isMoving) {
+            throw new Error('Only one movement can be applied at a time');
+        }
+        this._isMoving = true;
+
+        if (!Number.isInteger(steps) || steps < 1 || steps > 11) {
             this._isMoving = false;
-            this._mixer.removeEventListener('finished', finishMovement);
+            throw new Error('Invalid number of steps');
+        }
 
-            flipGroup.quaternion.copy(finalQuaternion);
-            for (const pieceMesh of flipGroup.children.slice()) {
-                this.mesh.attach(pieceMesh);
+        let cut = 0;
+        let found = false;
+        for (const [i, piece] of layerPieces.entries()) {
+            cut += piece.size;
+
+            if (cut === steps) {
+                found = true;
+                const prefix = layerPieces.splice(0, i + 1);
+                layerPieces.push(...prefix);
+                break;
             }
-        };
-        this._mixer.addEventListener('finished', finishMovement);
+        }
 
-        action.play();
+        if (!found) {
+            this._isMoving = false;
+            throw new Error('Invalid number of steps: cannot find a clear cut');
+        }
+
+        const axis = new THREE.Vector3(0, 0, 1);
+        const finalQuaternion = new THREE.Quaternion();
+        finalQuaternion.setFromAxisAngle(axis, direction * steps * Math.PI / 6);
+
+        await this._animateAndWait(layerPieces, finalQuaternion);
+        this._isMoving = false;
+    }
+
+    toString() {
+        function piecesToString(pieces) {
+            let totalSize = 0;
+            let str = '';
+            for (const piece of pieces) {
+                str += piece.name;
+                totalSize += piece.size;
+                if (totalSize === 6) {
+                    str += '|';
+                } else {
+                    str += ',';
+                }
+            }
+            return str.slice(0, -1);
+        }
+
+        return piecesToString(this.topPieces) + ' ' + this.middleSolved + ' ' + piecesToString(this.bottomPieces);
+    }
+
+    fromString(str) {
+        const [topStr, middleStr, bottomStr] = str.split(' ', 3);
+        const allPieces = new Map();
+        for (const piece of [...this.topPieces, ...this.bottomPieces]) {
+            allPieces.set(piece.name, piece);
+        }
+
+        function parseOuterLayer(str) {
+            const newPieces = [];
+            for (const name of str.split(/[,|]/)) {
+                const piece = allPieces.get(name);
+                if (!piece) {
+                    throw new Error(`Invalid piece: ${name}`);
+                }
+                newPieces.push(piece);
+            }
+            return newPieces;
+        }
+
+        const newTopPieces = parseOuterLayer(topStr);
+        const newBottomPieces = parseOuterLayer(bottomStr);
+
+        if (allPieces.size) {
+            throw new Error('Not all pieces were used');
+        }
+
+        this.topPieces = newTopPieces;
+        this.middleSolved = middleStr === 'true';
+        this.bottomPieces = newBottomPieces;
     }
 
     animate(delta) {
@@ -160,12 +240,65 @@ class Cube {
             }
         }
 
-        throw Error('There must be a prefix that adds up to 6');
+        throw new Error('There must be a prefix that adds up to 6');
+    }
+
+    /**
+     * Play a given quaternion animation to the given set of pieces, returning a promise that will resolve when it's
+     * finished.
+     * @param pieces
+     * @param finalQuaternion
+     * @returns {Promise<unknown>}
+     * @private
+     */
+    _animateAndWait(pieces, finalQuaternion) {
+        const group = new THREE.Group();
+        this.mesh.add(group);
+        for (const piece of pieces) {
+            group.attach(piece.mesh);
+        }
+
+        const initialQuaternion = new THREE.Quaternion();
+        const track = new THREE.QuaternionKeyframeTrack('.quaternion', [0, 1], [
+            initialQuaternion.x,
+            initialQuaternion.y,
+            initialQuaternion.z,
+            initialQuaternion.w,
+            finalQuaternion.x,
+            finalQuaternion.y,
+            finalQuaternion.z,
+            finalQuaternion.w,
+        ]);
+
+        const clip = new THREE.AnimationClip('movement', 1, [track]);
+        const action = this._mixer.clipAction(clip, group);
+        action.setLoop(THREE.LoopOnce, 0);
+
+        const promise = new Promise(resolve => {
+            const finishMovement = event => {
+                if (event.action === action) {
+                    this._mixer.removeEventListener('finished', finishMovement);
+
+                    group.quaternion.copy(finalQuaternion);
+                    for (const child of group.children.slice()) {
+                        this.mesh.attach(child);
+                    }
+                    group.removeFromParent();
+
+                    resolve();
+                }
+            };
+            this._mixer.addEventListener('finished', finishMovement);
+        });
+
+        action.play();
+
+        return promise;
     }
 }
 
 class SmallPiece {
-    constructor(halfSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, bottomFaceMaterial, topFaceMaterial, sideFaceMaterial) {
+    constructor(halfSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, bottomFaceMaterial, topFaceMaterial, sideFaceMaterial, name) {
         const halfCubeSide = cubeSide / 2;
         const shape = new THREE.Shape();
         shape.moveTo(0, 0);
@@ -205,11 +338,12 @@ class SmallPiece {
         this.mesh = group;
 
         this.size = 1;
+        this.name = name;
     }
 }
 
 class BigPiece {
-    constructor(halfSmallPieceSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, bottomFaceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial) {
+    constructor(halfSmallPieceSide, cubeSide, verticalBevel, horizontalBevel, mainMaterial, bottomFaceMaterial, topFaceMaterial, sideYFaceMaterial, sideXFaceMaterial, name) {
         const halfCubeSide = cubeSide / 2;
         const shape = new THREE.Shape();
         shape.moveTo(0, 0);
@@ -261,6 +395,7 @@ class BigPiece {
         this.mesh = group;
 
         this.size = 2;
+        this.name = name;
     }
 }
 
@@ -328,14 +463,7 @@ controls.minDistance = 0.5;
 controls.maxDistance = 3;
 controls.maxPolarAngle = 3 * Math.PI / 2;
 
-// ambient light
-
 scene.add(new THREE.AmbientLight('white'));
-
-// point light
-
-// const light = new THREE.PointLight( 0xffffff, 1 );
-// camera.add( light );
 
 {
     const color = 0xFFFFFF;
@@ -343,23 +471,19 @@ scene.add(new THREE.AmbientLight('white'));
     const light = new THREE.DirectionalLight(color, intensity);
     light.position.set(-1, 2, 6);
     scene.add(light);
-
-    const light2 = new THREE.DirectionalLight(color, intensity);
-    light2.position.set(1, -2, 6);
-    // scene.add(light2);
 }
 
 // helper
 
-cube.mesh.add(new THREE.AxesHelper(20));
-scene.add(new THREE.AxesHelper(10));
+// cube.mesh.add(new THREE.AxesHelper(20));
+// scene.add(new THREE.AxesHelper(10));
 
 const clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
-    // cube.mesh.rotation.z -= 0.003;
-    // cube.mesh.rotation.x -= 0.001;
+    cube.mesh.rotation.z -= 0.003;
+    cube.mesh.rotation.x -= 0.001;
     cube.animate(clock.getDelta());
     renderer.render(scene, camera);
 }
@@ -368,4 +492,16 @@ animate();
 
 document.getElementById('flip').onclick = () => {
     cube.flip();
+};
+document.getElementById('rotateTop1').onclick = () => {
+    cube.rotateTop(1);
+};
+document.getElementById('rotateTop2').onclick = () => {
+    cube.rotateTop(2);
+};
+document.getElementById('rotateBottom1').onclick = () => {
+    cube.rotateBottom(1);
+};
+document.getElementById('rotateBottom2').onclick = () => {
+    cube.rotateBottom(2);
 };
