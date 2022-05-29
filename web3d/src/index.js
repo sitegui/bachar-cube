@@ -82,9 +82,17 @@ class Cube {
         for (const piece of this.bottomPieces) {
             this.mesh.add(piece.mesh);
         }
+
+        this._mixer = new THREE.AnimationMixer(this.mesh);
+        this._isMoving = false;
     }
 
     flip() {
+        if (this._isMoving) {
+            throw Error('Only one movement can be applied at a time');
+        }
+        this._isMoving = true;
+
         const [flipTop, stayTop] = this._split(this.topPieces);
         const [flipBottom, stayBottom] = this._split(this.bottomPieces);
 
@@ -98,13 +106,43 @@ class Cube {
             flipGroup.attach(piece.mesh);
         }
 
+        const initialQuaternion = new THREE.Quaternion();
         const angle = Math.PI / 12;
         const axis = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
-        flipGroup.rotateOnAxis(axis, Math.PI);
+        const finalQuaternion = initialQuaternion.clone();
+        finalQuaternion.setFromAxisAngle(axis, Math.PI);
 
-        for (const pieceMesh of flipGroup.children.slice()) {
-            this.mesh.attach(pieceMesh);
-        }
+        const rotationTrack = new THREE.QuaternionKeyframeTrack('.quaternion', [0, 1], [
+            initialQuaternion.x,
+            initialQuaternion.y,
+            initialQuaternion.z,
+            initialQuaternion.w,
+            finalQuaternion.x,
+            finalQuaternion.y,
+            finalQuaternion.z,
+            finalQuaternion.w,
+        ]);
+
+        const animationClip = new THREE.AnimationClip('flip', 1, [rotationTrack]);
+        const action = this._mixer.clipAction(animationClip, flipGroup);
+        action.setLoop(THREE.LoopOnce, 0);
+
+        const finishMovement = () => {
+            this._isMoving = false;
+            this._mixer.removeEventListener('finished', finishMovement);
+
+            flipGroup.quaternion.copy(finalQuaternion);
+            for (const pieceMesh of flipGroup.children.slice()) {
+                this.mesh.attach(pieceMesh);
+            }
+        };
+        this._mixer.addEventListener('finished', finishMovement);
+
+        action.play();
+    }
+
+    animate(delta) {
+        this._mixer.update(delta);
     }
 
     /**
@@ -316,10 +354,13 @@ scene.add(new THREE.AmbientLight('white'));
 cube.mesh.add(new THREE.AxesHelper(20));
 scene.add(new THREE.AxesHelper(10));
 
+const clock = new THREE.Clock();
+
 function animate() {
     requestAnimationFrame(animate);
     // cube.mesh.rotation.z -= 0.003;
     // cube.mesh.rotation.x -= 0.001;
+    cube.animate(clock.getDelta());
     renderer.render(scene, camera);
 }
 
