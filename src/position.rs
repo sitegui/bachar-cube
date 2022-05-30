@@ -121,14 +121,38 @@ impl Position {
         self.top.solved_score() + self.middle_solved as u8 + self.bottom.solved_score()
     }
 
-    pub fn as_bytes(self) -> [u8; 25] {
-        let mut bytes = [u8::MAX; 25];
+    /// Return a very dense representation of the position, meant to represent very efficiently
+    /// this position.
+    ///
+    /// Each top piece is encoded in order, then each bottom piece is encoded in order, except the
+    /// last one (because it's a redundant information). Each piece is encoded as 4 bits.
+    ///
+    /// The last 4 bits are used to represent the middle piece.
+    pub fn as_bytes(self) -> u64 {
+        let mut encoded = 0;
 
-        bytes[..OUTER_LAYER_PIECES].copy_from_slice(&self.top.as_bytes());
-        bytes[OUTER_LAYER_PIECES] = self.middle_solved as u8;
-        bytes[OUTER_LAYER_PIECES + 1..].copy_from_slice(&self.bottom.as_bytes());
+        // There are exactly 16 pieces with id in total, so this will fill in all the 64 bits
+        for piece in self.top.pieces() {
+            if let Some(id) = piece.id() {
+                encoded <<= 4;
+                encoded |= id as u64;
+            }
+        }
+        for piece in self.bottom.pieces() {
+            if let Some(id) = piece.id() {
+                encoded <<= 4;
+                encoded |= id as u64;
+            }
+        }
 
-        bytes
+        // Ditch the last 4 bits
+        encoded >>= 4;
+        encoded <<= 4;
+
+        // The last 4 bits represent the middle piece
+        encoded |= self.middle_solved as u64;
+
+        encoded
     }
 }
 

@@ -2,3 +2,5 @@
 /.idea
 /web3d/node_modules
 /web3d/dist
+/flamegraph.svg
+/perf.data

@@ -76,6 +76,10 @@ impl OuterLayer {
         self.solved_score
     }
 
+    pub fn pieces(self) -> [OuterPiece; OUTER_LAYER_PIECES] {
+        self.pieces
+    }
+
     fn calculate_solved_score(pieces: [OuterPiece; OUTER_LAYER_PIECES]) -> u8 {
         let mut score = 0;
         for i in 1..OUTER_LAYER_PIECES {
@@ -83,10 +87,6 @@ impl OuterLayer {
         }
         score += pieces[OUTER_LAYER_PIECES - 1].is_followed_by(pieces[0]) as u8;
         score
-    }
-
-    pub fn as_bytes(self) -> [u8; OUTER_LAYER_PIECES] {
-        unsafe { mem::transmute(self.pieces) }
     }
 }
 

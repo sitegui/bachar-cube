@@ -69,10 +69,34 @@ impl OuterPiece {
         self as u8 & 0b1 != 0
     }
 
-    /// Return the is the other piece is the successor of this one in a solved position
+    /// Return if the other piece is the successor of this one in a solved position
     pub fn is_followed_by(self, other: Self) -> bool {
         let next_sequence = (self.sequence() + 1) % OUTER_LAYER_PIECES as u8;
         self.is_white() == other.is_white() && next_sequence == other.sequence()
+    }
+
+    /// Return an id for this piece. It's a value from 0 to 15, representing each one of the 16
+    /// existing pieces. `None` is returned for the second half of big pieces: in a sense they don't
+    /// have their own identity.
+    pub fn id(self) -> Option<u8> {
+        const SEQUENCE_TO_BASE_ID: [Option<u8>; 12] = [
+            Some(0),
+            None,
+            Some(1),
+            Some(2),
+            None,
+            Some(3),
+            Some(4),
+            None,
+            Some(5),
+            Some(6),
+            None,
+            Some(7),
+        ];
+
+        let base_id = SEQUENCE_TO_BASE_ID[self.sequence() as usize];
+        let extra = if self.is_white() { 0 } else { 8 };
+        base_id.map(|base_id| base_id + extra)
     }
 }
 
