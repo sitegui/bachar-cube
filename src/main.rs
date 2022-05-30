@@ -96,7 +96,7 @@ impl PartialOrd for Enqueued {
 
 fn explore_simple(initial_position: Position) {
     let solved_position = Position::solved();
-    let mut seen_positions = HashSet::new();
+    let mut seen_positions = PrefixSet::new();
     let mut all_movements = Vec::new();
     let mut queue = BinaryHeap::new();
 
