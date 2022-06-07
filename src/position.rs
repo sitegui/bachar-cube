@@ -1,4 +1,4 @@
-use crate::outer_layer::{OuterLayer, OUTER_LAYER_PIECES};
+use crate::outer_layer::OuterLayer;
 use crate::outer_piece::OuterPiece;
 use std::fmt;
 
@@ -34,10 +34,7 @@ pub enum MovementChange {
 }
 
 impl Position {
-    pub const MAX_SOLVED_SCORE: u8 = 25;
-
     pub fn with_layers(top: OuterLayer, middle_solved: bool, bottom: OuterLayer) -> Self {
-        let solved_score = top.solved_score() + middle_solved as u8 + bottom.solved_score();
         Position {
             top,
             middle_solved,

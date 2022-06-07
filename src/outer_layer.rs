@@ -1,6 +1,6 @@
 use crate::OuterPiece;
 use itertools::Itertools;
-use std::{fmt, mem};
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]
 pub struct OuterLayer {
