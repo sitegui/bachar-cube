@@ -6,7 +6,7 @@ use itertools::Itertools;
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 
 #[derive(Debug, Clone, Copy)]
 struct VisitedPosition {
@@ -22,21 +22,6 @@ struct Enqueued {
     index: u32,
 }
 
-impl Ord for Enqueued {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.score
-            .cmp(&other.score)
-            .then(self.depth.cmp(&other.depth).reverse())
-            .then(self.index.cmp(&other.index))
-    }
-}
-
-impl PartialOrd for Enqueued {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 #[derive(Debug)]
 struct MainExplorer {
     iterations: usize,
@@ -45,6 +30,63 @@ struct MainExplorer {
     queue: BinaryHeap<Enqueued>,
     is_solved: AtomicCell<bool>,
     solution: Mutex<Option<Vec<Movement>>>,
+}
+
+#[derive(Debug)]
+struct ThreadExplorer<'a> {
+    id: usize,
+    iterations: usize,
+    main: &'a MainExplorer,
+    visits: Vec<VisitedPosition>,
+    queue: BinaryHeap<Enqueued>,
+}
+
+trait Explorer {
+    fn insert_position(&mut self, position: Position) -> bool;
+    fn next_index(&self) -> u32;
+    fn push_visit(&mut self, visit: VisitedPosition);
+    fn queue_mut(&mut self) -> &mut BinaryHeap<Enqueued>;
+    fn get_visit(&self, index: u32) -> VisitedPosition;
+    fn is_solved(&self) -> bool;
+    fn set_solution(&self, solution: Vec<Movement>);
+    fn iterations_mut(&mut self) -> &mut usize;
+
+    fn enqueue(&mut self, parent: Enqueued, movement: Movement) {
+        if self.insert_position(movement.position) {
+            let next_index = self.next_index();
+            self.push_visit(VisitedPosition {
+                movement,
+                prev_index: Some(parent.index),
+            });
+            self.queue_mut().push(Enqueued {
+                score: movement.position.solved_score(),
+                depth: parent.depth + 1,
+                index: next_index,
+            });
+        }
+    }
+
+    fn pop(&mut self) -> Option<(Enqueued, VisitedPosition)> {
+        if self.is_solved() {
+            return None;
+        }
+
+        self.queue_mut().pop().map(|enqueued| {
+            *self.iterations_mut() += 1;
+            (enqueued, self.get_visit(enqueued.index))
+        })
+    }
+
+    fn mark_solved(&mut self, mut solution: VisitedPosition) {
+        let mut movements = vec![];
+        while let Some(prev_index) = solution.prev_index {
+            movements.push(solution.movement);
+            solution = self.get_visit(prev_index);
+        }
+        movements.push(solution.movement);
+        movements.reverse();
+        self.set_solution(movements);
+    }
 }
 
 impl MainExplorer {
@@ -108,8 +150,8 @@ impl MainExplorer {
 }
 
 impl Explorer for MainExplorer {
-    fn seen_positions(&self) -> &PrefixSet {
-        &self.seen_positions
+    fn insert_position(&mut self, position: Position) -> bool {
+        self.seen_positions.insert(position.as_bytes())
     }
 
     fn next_index(&self) -> u32 {
@@ -142,66 +184,24 @@ impl Explorer for MainExplorer {
     }
 }
 
-#[derive(Debug)]
-struct ThreadExplorer<'a> {
-    id: usize,
-    iterations: usize,
-    main: &'a MainExplorer,
-    visits: Vec<VisitedPosition>,
-    queue: BinaryHeap<Enqueued>,
+impl Ord for Enqueued {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.score
+            .cmp(&other.score)
+            .then(self.depth.cmp(&other.depth).reverse())
+            .then(self.index.cmp(&other.index))
+    }
 }
 
-trait Explorer {
-    fn seen_positions(&self) -> &PrefixSet;
-    fn next_index(&self) -> u32;
-    fn push_visit(&mut self, visit: VisitedPosition);
-    fn queue_mut(&mut self) -> &mut BinaryHeap<Enqueued>;
-    fn get_visit(&self, index: u32) -> VisitedPosition;
-    fn is_solved(&self) -> bool;
-    fn set_solution(&self, solution: Vec<Movement>);
-    fn iterations_mut(&mut self) -> &mut usize;
-
-    fn enqueue(&mut self, parent: Enqueued, movement: Movement) {
-        if self.seen_positions().insert(movement.position.as_bytes()) {
-            let next_index = self.next_index();
-            self.push_visit(VisitedPosition {
-                movement,
-                prev_index: Some(parent.index),
-            });
-            self.queue_mut().push(Enqueued {
-                score: movement.position.solved_score(),
-                depth: parent.depth + 1,
-                index: next_index,
-            });
-        }
-    }
-
-    fn pop(&mut self) -> Option<(Enqueued, VisitedPosition)> {
-        if self.is_solved() {
-            return None;
-        }
-
-        self.queue_mut().pop().map(|enqueued| {
-            *self.iterations_mut() += 1;
-            (enqueued, self.get_visit(enqueued.index))
-        })
-    }
-
-    fn mark_solved(&mut self, mut solution: VisitedPosition) {
-        let mut movements = vec![];
-        while let Some(prev_index) = solution.prev_index {
-            movements.push(solution.movement);
-            solution = self.get_visit(prev_index);
-        }
-        movements.push(solution.movement);
-        movements.reverse();
-        self.set_solution(movements);
+impl PartialOrd for Enqueued {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
 impl Explorer for ThreadExplorer<'_> {
-    fn seen_positions(&self) -> &PrefixSet {
-        &self.main.seen_positions
+    fn insert_position(&mut self, position: Position) -> bool {
+        self.main.seen_positions.insert(position.as_bytes())
     }
 
     fn next_index(&self) -> u32 {
