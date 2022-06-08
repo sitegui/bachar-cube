@@ -1,5 +1,7 @@
 use crate::find_solution::find_solution;
+use crate::improve_solution::improve_solution;
 use crate::position::{MovementChange, MovementKind};
+use anyhow::{Context, Result};
 use itertools::Itertools;
 use outer_layer::OuterLayer;
 use outer_piece::OuterPiece;
@@ -9,6 +11,7 @@ use std::error::Error;
 use std::time::Instant;
 
 mod find_solution;
+mod improve_solution;
 mod outer_layer;
 mod outer_piece;
 mod position;
@@ -18,7 +21,7 @@ mod visited_graph;
 
 const NUM_THREADS: usize = 16;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let initial_position = Position::with_layers(
         OuterLayer::new([
             OuterPiece::YellowOrange,
@@ -62,12 +65,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build_global()?;
 
     let start = Instant::now();
-    let solution = find_solution(initial_position, 1_000_000, NUM_THREADS);
-    println!("start.elapsed() = {:?}", start.elapsed());
+    let solution = find_solution(initial_position, 1_000_000, NUM_THREADS)
+        .context("expected a solution to be found")?;
+    println!("find_solution in {:?}", start.elapsed());
 
-    if let Some(solution) = solution {
-        println!("{:?}", solution.iter().map(|m| m.change).format(", "));
-    }
+    println!("{:?}", solution.iter().map(|m| m.change).format(", "));
+
+    let start = Instant::now();
+    improve_solution(&solution);
+    println!("improve_solution in {:?}", start.elapsed());
 
     Ok(())
 }

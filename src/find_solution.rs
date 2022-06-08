@@ -193,6 +193,8 @@ trait Explorer {
             movements.push(solution.movement);
             solution = self.get_visit(prev_index);
         }
+        movements.push(solution.movement);
+        movements.reverse();
         self.set_solution(movements);
     }
 }

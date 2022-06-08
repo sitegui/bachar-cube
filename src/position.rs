@@ -173,6 +173,17 @@ impl MovementKind {
     }
 }
 
+impl MovementChange {
+    pub fn inversed(self) -> Self {
+        use MovementChange::*;
+        match self {
+            Flip => Flip,
+            RotateTop(n) => RotateTop(12 - n),
+            RotateBottom(n) => RotateBottom(12 - n),
+        }
+    }
+}
+
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {} {}", self.top, self.middle_solved, self.bottom)
