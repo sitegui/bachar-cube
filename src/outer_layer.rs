@@ -24,16 +24,7 @@ impl OuterLayer {
 
     pub fn for_each_movement(self, mut f: impl FnMut(Self, u8)) {
         let mut call_shift = |shift: usize| {
-            let mut new_pieces = [OuterPiece::Unknown; OUTER_LAYER_PIECES];
-            new_pieces[..OUTER_LAYER_PIECES - shift].copy_from_slice(&self.pieces[shift..]);
-            new_pieces[OUTER_LAYER_PIECES - shift..].copy_from_slice(&self.pieces[..shift]);
-            f(
-                OuterLayer {
-                    pieces: new_pieces,
-                    solved_score: self.solved_score,
-                },
-                shift as u8,
-            );
+            f(self.rotated(shift), shift as u8);
         };
 
         // Shift of 6 is always possible
@@ -49,7 +40,17 @@ impl OuterLayer {
         }
     }
 
-    pub fn flip(self, other: Self) -> (Self, Self) {
+    pub fn rotated(self, n: usize) -> Self {
+        let mut new_pieces = [OuterPiece::Unknown; OUTER_LAYER_PIECES];
+        new_pieces[..OUTER_LAYER_PIECES - n].copy_from_slice(&self.pieces[n..]);
+        new_pieces[OUTER_LAYER_PIECES - n..].copy_from_slice(&self.pieces[..n]);
+        OuterLayer {
+            pieces: new_pieces,
+            solved_score: self.solved_score,
+        }
+    }
+
+    pub fn flipped(self, other: Self) -> (Self, Self) {
         let mut new_self_pieces = self.pieces;
         let mut new_other_pieces = other.pieces;
 

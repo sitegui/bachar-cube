@@ -76,8 +76,24 @@ impl Position {
         )
     }
 
+    pub fn changed(self, change: MovementChange) -> Self {
+        match change {
+            MovementChange::Flip => self.flipped(),
+            MovementChange::RotateTop(n) => Position::with_layers(
+                self.top.rotated(n as usize),
+                self.middle_solved,
+                self.bottom,
+            ),
+            MovementChange::RotateBottom(n) => Position::with_layers(
+                self.top,
+                self.middle_solved,
+                self.bottom.rotated(n as usize),
+            ),
+        }
+    }
+
     pub fn flipped(self) -> Self {
-        let (flipped_top, flipped_bottom) = self.top.flip(self.bottom);
+        let (flipped_top, flipped_bottom) = self.top.flipped(self.bottom);
         Position::with_layers(flipped_top, !self.middle_solved, flipped_bottom)
     }
 

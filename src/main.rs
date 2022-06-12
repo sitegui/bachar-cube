@@ -7,7 +7,9 @@ use outer_layer::OuterLayer;
 use outer_piece::OuterPiece;
 use position::Position;
 use rayon::ThreadPoolBuilder;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
+use std::fmt;
 use std::time::Instant;
 
 mod find_solution;
@@ -24,33 +26,33 @@ const NUM_THREADS: usize = 16;
 fn main() -> Result<()> {
     let initial_position = Position::with_layers(
         OuterLayer::new([
-            OuterPiece::YellowOrange,
-            OuterPiece::WhiteGreen,
-            OuterPiece::WhiteBlueOrange1,
-            OuterPiece::WhiteBlueOrange2,
-            OuterPiece::WhiteGreenRed1,
-            OuterPiece::WhiteGreenRed2,
-            OuterPiece::YellowBlueRed1,
-            OuterPiece::YellowBlueRed2,
-            OuterPiece::WhiteOrange,
-            OuterPiece::YellowGreenOrange1,
-            OuterPiece::YellowGreenOrange2,
-            OuterPiece::YellowGreen,
-        ]),
-        true,
-        OuterLayer::new([
-            OuterPiece::WhiteRed,
-            OuterPiece::WhiteRedBlue1,
-            OuterPiece::WhiteRedBlue2,
-            OuterPiece::WhiteBlue,
-            OuterPiece::WhiteOrangeGreen1,
-            OuterPiece::WhiteOrangeGreen2,
-            OuterPiece::YellowRed,
-            OuterPiece::YellowRedGreen1,
-            OuterPiece::YellowRedGreen2,
             OuterPiece::YellowOrangeBlue1,
             OuterPiece::YellowOrangeBlue2,
             OuterPiece::YellowBlue,
+            OuterPiece::YellowBlueRed1,
+            OuterPiece::YellowBlueRed2,
+            OuterPiece::YellowRed,
+            OuterPiece::WhiteRedBlue1,
+            OuterPiece::WhiteRedBlue2,
+            OuterPiece::WhiteBlue,
+            OuterPiece::WhiteBlueOrange1,
+            OuterPiece::WhiteBlueOrange2,
+            OuterPiece::WhiteOrange,
+        ]),
+        true,
+        OuterLayer::new([
+            OuterPiece::WhiteGreen,
+            OuterPiece::WhiteOrangeGreen1,
+            OuterPiece::WhiteOrangeGreen2,
+            OuterPiece::WhiteGreenRed1,
+            OuterPiece::WhiteGreenRed2,
+            OuterPiece::WhiteRed,
+            OuterPiece::YellowOrange,
+            OuterPiece::YellowRedGreen1,
+            OuterPiece::YellowRedGreen2,
+            OuterPiece::YellowGreen,
+            OuterPiece::YellowGreenOrange1,
+            OuterPiece::YellowGreenOrange2,
         ]),
     );
 
@@ -72,7 +74,7 @@ fn main() -> Result<()> {
     println!("{:?}", solution.iter().map(|m| m.change).format(", "));
 
     let start = Instant::now();
-    improve_solution(&solution);
+    // improve_solution(&solution);
     println!("improve_solution in {:?}", start.elapsed());
 
     Ok(())
