@@ -120,7 +120,7 @@ class Cube {
         const finalQuaternion = new THREE.Quaternion();
         finalQuaternion.setFromAxisAngle(axis, Math.PI);
 
-        await this._animateAndWait(pieces, finalQuaternion);
+        await this._animateAndWait(pieces, finalQuaternion, 1);
         this._isMoving = false;
     }
 
@@ -165,7 +165,8 @@ class Cube {
         const finalQuaternion = new THREE.Quaternion();
         finalQuaternion.setFromAxisAngle(axis, direction * steps * Math.PI / 6);
 
-        await this._animateAndWait(layerPieces, finalQuaternion);
+        const stepDistance = Math.min(steps, 12 - steps);
+        await this._animateAndWait(layerPieces, finalQuaternion, stepDistance / 6);
         this._isMoving = false;
     }
 
@@ -293,10 +294,11 @@ class Cube {
      * finished.
      * @param pieces
      * @param finalQuaternion
+     * @param time
      * @returns {Promise<unknown>}
      * @private
      */
-    _animateAndWait(pieces, finalQuaternion) {
+    _animateAndWait(pieces, finalQuaternion, time) {
         const group = new THREE.Group();
         this.mesh.add(group);
         for (const piece of pieces) {
@@ -304,7 +306,7 @@ class Cube {
         }
 
         const initialQuaternion = new THREE.Quaternion();
-        const track = new THREE.QuaternionKeyframeTrack('.quaternion', [0, 1], [
+        const track = new THREE.QuaternionKeyframeTrack('.quaternion', [0, time], [
             initialQuaternion.x,
             initialQuaternion.y,
             initialQuaternion.z,
@@ -315,7 +317,7 @@ class Cube {
             finalQuaternion.w,
         ]);
 
-        const clip = new THREE.AnimationClip('movement', 1, [track]);
+        const clip = new THREE.AnimationClip('movement', time, [track]);
         const action = this._mixer.clipAction(clip, group);
         action.setLoop(THREE.LoopOnce, 0);
 
@@ -500,9 +502,9 @@ class MiddlePiece {
 
 const cube = new Cube();
 scene.add(cube.mesh);
-cube.setFromString('YO,WG,WBO,WGR|YBR,WO,YGO,YG true WR,WRB,WB,WOG|YR,YRG,YOB,YB');
+cube.setFromString('YOB,YB,YBR,YR|WRB,WB,WBO,WO true WG,WOG,WGR,WR|YO,YRG,YG,YGO');
 
-cube.mesh.rotation.x = Math.PI / 2;
+// cube.mesh.rotation.x = Math.PI / 2;
 camera.position.z = 3;
 
 // controls
@@ -528,16 +530,24 @@ scene.add(new THREE.AmbientLight('white'));
 // scene.add(new THREE.AxesHelper(10));
 
 const clock = new THREE.Clock();
+let isFloating = true;
 
 function animate() {
     requestAnimationFrame(animate);
-    cube.mesh.rotation.z -= 0.01;
-    cube.mesh.rotation.x -= 0.003;
+    if (isFloating) {
+        cube.mesh.rotation.z -= 0.01;
+        cube.mesh.rotation.x -= 0.003;
+    }
     cube.animate(clock.getDelta());
     renderer.render(scene, camera);
 }
 
 animate();
+
+const solutionStr = 'RotateBottom(7), Flip, RotateBottom(11), Flip, RotateBottom(5), Flip, RotateBottom(7), Flip, ' +
+    'RotateBottom(2), Flip, RotateBottom(5), RotateTop(8), Flip, RotateTop(10), Flip, RotateBottom(3), Flip, ' +
+    'RotateTop(1), Flip, RotateTop(9), Flip, RotateBottom(3), Flip, RotateBottom(5), Flip, RotateBottom(9), Flip, ' +
+    'RotateTop(9), Flip, RotateBottom(3), Flip, RotateBottom(9), Flip, RotateBottom(6), RotateTop(4)';
 
 document.getElementById('flip').onclick = () => {
     cube.flip();
@@ -558,21 +568,28 @@ document.getElementById('reset').onclick = () => {
     cube.setFromString('WRB,WB,WBO,WO|WOG,WG,WGR,WR true YO,YOB,YB,YBR|YR,YRG,YG,YGO');
 };
 document.getElementById('solve').onclick = () => {
-    cube.applyMovementsFromStr('RotateBottom(6), Flip, RotateBottom(1), RotateTop(3), Flip, RotateBottom(11), Flip, ' +
-        'RotateBottom(7), Flip, RotateTop(3), Flip, RotateBottom(5), Flip, RotateBottom(4), RotateTop(9), Flip, ' +
-        'RotateTop(3), Flip, RotateTop(9), Flip, RotateBottom(2), Flip, RotateTop(1), Flip, RotateTop(11), Flip, ' +
-        'RotateTop(9), Flip, RotateTop(10), Flip, RotateBottom(6), Flip, RotateBottom(3), RotateTop(10), Flip, ' +
-        'RotateBottom(2), Flip, RotateBottom(5), RotateTop(10), Flip, RotateTop(2), Flip, RotateTop(5), Flip, ' +
-        'RotateTop(10), Flip, RotateTop(9), Flip, RotateTop(2), Flip, RotateBottom(4), Flip, RotateBottom(3), ' +
-        'Flip, RotateTop(9), Flip, RotateTop(3), Flip, RotateBottom(11), Flip, RotateBottom(7), RotateTop(7), ' +
-        'Flip, RotateBottom(5), Flip, RotateBottom(5), Flip, RotateBottom(7), Flip, RotateBottom(2), Flip, ' +
-        'RotateBottom(5), RotateTop(8), Flip, RotateTop(10), Flip, RotateBottom(3), Flip, RotateTop(1), Flip, ' +
-        'RotateTop(9), Flip, RotateBottom(3), Flip, RotateBottom(5), Flip, RotateBottom(9), Flip, RotateTop(9), Flip, ' +
-        'RotateBottom(3), Flip, RotateBottom(9), Flip, RotateBottom(6), RotateTop(4)');
+    cube.applyMovementsFromStr(solutionStr);
+};
+
+const nextSolutionSteps = solutionStr.split(', ');
+
+document.getElementById('solveStep').onclick = event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+
+    const nextStep = nextSolutionSteps.shift();
+    if (nextStep) {
+        cube.applyMovementsFromStr(nextStep).then(() => {
+            button.disabled = false;
+        });
+    }
 };
 document.getElementById('fast').onclick = () => {
     cube._mixer.timeScale = 4;
 };
 document.getElementById('slow').onclick = () => {
     cube._mixer.timeScale = 1;
+};
+document.getElementById('toggleFloating').onclick = () => {
+    isFloating = !isFloating;
 };
