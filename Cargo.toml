@@ -16,3 +16,7 @@ rayon = "1.5.2"
 
 [profile.release]
 debug = true
+
+[[bin]]
+name = "faster"
+path = "src/faster/main.rs"
