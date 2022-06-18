@@ -1,9 +1,10 @@
 use crate::piece::Piece;
+use crate::position::{BITS_PER_PIECE, LAST_PIECE_MASK};
 use std::fmt;
 use std::fmt::Write;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-pub struct Layer {
+pub struct RotatableLayer {
     /// The "flippable" half of the layer
     first: HalfLayer,
     /// The "fixed" half of the layer
@@ -13,11 +14,11 @@ pub struct Layer {
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 struct HalfLayer {
     pieces: u64,
-    num_pieces: u8,
+    num_pieces: u32,
 }
 
-impl Layer {
-    /// Split a full position into it's two layers
+impl RotatableLayer {
+    /// Split a full position into its two layers
     ///
     /// # Panics
     /// It will panic if the half-layers cannot be correctly constructed
@@ -27,7 +28,7 @@ impl Layer {
         let (top_second, top_first) = Self::extract_right_most_half_layer(remaining).unwrap();
 
         (
-            Layer {
+            RotatableLayer {
                 first: HalfLayer {
                     pieces: top_first,
                     num_pieces: 16
@@ -37,7 +38,7 @@ impl Layer {
                 },
                 second: top_second,
             },
-            Layer {
+            RotatableLayer {
                 first: bottom_first,
                 second: bottom_second,
             },
@@ -47,11 +48,11 @@ impl Layer {
     /// Perform a flip change, by exchanging the first half-layer of each part.
     pub fn flip(top: Self, bottom: Self) -> (Self, Self) {
         (
-            Layer {
+            RotatableLayer {
                 first: bottom.first,
                 second: top.second,
             },
-            Layer {
+            RotatableLayer {
                 first: top.first,
                 second: bottom.second,
             },
@@ -59,16 +60,17 @@ impl Layer {
     }
 
     /// Generate all valid rotations of this layer and store them in the given vec.
-    pub fn rotations(self, rotations: &mut Vec<(Layer, u8)>) {
+    pub fn rotations(self, rotations: &mut Vec<(RotatableLayer, u8)>) {
         rotations.clear();
 
         // Represent the layer as an `u64`, 4 bits per piece:
         // 0 ... 0 | first | second
-        let mut bits = (self.first.pieces << (4 * self.second.num_pieces)) | self.second.pieces;
+        let mut bits =
+            (self.first.pieces << (BITS_PER_PIECE * self.second.num_pieces)) | self.second.pieces;
 
         // Count how many bits away from the right the left-most piece is
         let num_pieces = self.first.num_pieces + self.second.num_pieces;
-        let left_most_piece_shift = 4 * num_pieces - 4;
+        let left_most_piece_shift = BITS_PER_PIECE * num_pieces - BITS_PER_PIECE;
 
         // Identity is always possible
         rotations.push((self, 0));
@@ -76,7 +78,7 @@ impl Layer {
         // Generate all other possible rotations
         for n in 1..num_pieces {
             // Take the right-most piece and push it into the left
-            let right_most_piece = bits & 0xF;
+            let right_most_piece = bits & LAST_PIECE_MASK;
             bits = (bits >> 4) | (right_most_piece << left_most_piece_shift);
 
             // Split the bit pattern into each half-layer
@@ -87,7 +89,7 @@ impl Layer {
                     continue;
                 }
                 Some((new_second_half, new_first_half)) => {
-                    let new_layer = Layer {
+                    let new_layer = RotatableLayer {
                         first: HalfLayer {
                             pieces: new_first_half,
                             num_pieces: num_pieces - new_second_half.num_pieces,
@@ -95,7 +97,7 @@ impl Layer {
                         second: new_second_half,
                     };
 
-                    rotations.push((new_layer, n));
+                    rotations.push((new_layer, n as u8));
                 }
             }
         }
@@ -105,11 +107,11 @@ impl Layer {
     /// compose a valid position.
     pub fn join(top: Self, bottom: Self) -> u64 {
         let mut bits = top.first.pieces;
-        bits <<= 4 * top.second.num_pieces;
+        bits <<= BITS_PER_PIECE * top.second.num_pieces;
         bits |= top.second.pieces;
-        bits <<= 4 * bottom.first.num_pieces;
+        bits <<= BITS_PER_PIECE * bottom.first.num_pieces;
         bits |= bottom.first.pieces;
-        bits <<= 4 * bottom.second.num_pieces;
+        bits <<= BITS_PER_PIECE * bottom.second.num_pieces;
         bits |= bottom.second.pieces;
         bits
     }
@@ -143,8 +145,8 @@ impl Layer {
             return None;
         };
 
-        let remaining_bits = bits >> (4 * num_pieces);
-        let pieces = bits ^ (remaining_bits << (4 * num_pieces));
+        let remaining_bits = bits >> (BITS_PER_PIECE * num_pieces);
+        let pieces = bits ^ (remaining_bits << (BITS_PER_PIECE * num_pieces));
         Some((HalfLayer { pieces, num_pieces }, remaining_bits))
     }
 }
@@ -156,8 +158,8 @@ impl fmt::Display for HalfLayer {
                 f.write_char(' ')?;
             }
 
-            let shift = 4 * (self.num_pieces - n - 1);
-            let piece = Piece::from_bits((self.pieces >> shift) & 0xF);
+            let shift = BITS_PER_PIECE * (self.num_pieces - n - 1);
+            let piece = Piece::from_bits((self.pieces >> shift) & LAST_PIECE_MASK);
             write!(f, "{}", piece)?;
         }
 
@@ -165,7 +167,7 @@ impl fmt::Display for HalfLayer {
     }
 }
 
-impl fmt::Display for Layer {
+impl fmt::Display for RotatableLayer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} | {}", self.first, self.second)
     }
@@ -176,18 +178,18 @@ mod tests {
     use super::*;
     use itertools::Itertools;
 
-    fn from_pieces(pieces: &[Piece]) -> Layer {
+    fn from_pieces(pieces: &[Piece]) -> RotatableLayer {
         let mut bits = 0;
         for piece in pieces {
-            bits <<= 4;
+            bits <<= BITS_PER_PIECE;
             bits |= piece.as_bits();
         }
 
-        let (second, first) = Layer::extract_right_most_half_layer(bits).unwrap();
-        Layer {
+        let (second, first) = RotatableLayer::extract_right_most_half_layer(bits).unwrap();
+        RotatableLayer {
             first: HalfLayer {
                 pieces: first,
-                num_pieces: pieces.len() as u8 - second.num_pieces,
+                num_pieces: pieces.len() as u32 - second.num_pieces,
             },
             second,
         }

@@ -1,5 +1,6 @@
 use super::piece::Piece;
-use crate::layer::Layer;
+use crate::rotatable_layer::RotatableLayer;
+use crate::scorable_layer::ScorableLayer;
 use itertools::Itertools;
 use std::fmt;
 use std::fmt::Write;
@@ -28,11 +29,14 @@ pub struct Movement {
 #[derive(Debug, Clone)]
 pub struct NeighboursStack {
     neighbours: Vec<Movement>,
-    top_before_rotations: Vec<(Layer, u8)>,
-    bottom_before_rotations: Vec<(Layer, u8)>,
-    top_after_rotations: Vec<(Layer, u8)>,
-    bottom_after_rotations: Vec<(Layer, u8)>,
+    top_before_rotations: Vec<(RotatableLayer, u8)>,
+    bottom_before_rotations: Vec<(RotatableLayer, u8)>,
+    top_after_rotations: Vec<(RotatableLayer, u8)>,
+    bottom_after_rotations: Vec<(RotatableLayer, u8)>,
 }
+
+pub const BITS_PER_PIECE: u32 = 4;
+pub const LAST_PIECE_MASK: u64 = 0xF;
 
 impl Position {
     pub fn solved() -> Self {
@@ -63,7 +67,7 @@ impl Position {
 
         let mut as_bits = 0;
         for piece in pieces {
-            as_bits <<= 4;
+            as_bits <<= BITS_PER_PIECE;
             as_bits |= piece.as_bits();
         }
 
@@ -72,10 +76,11 @@ impl Position {
 
     pub fn pieces(&self) -> [Piece; 16] {
         let mut pieces = [Piece::YellowRedGreen; 16];
+        let mut bits = self.pieces;
 
-        for (i, piece) in pieces.iter_mut().enumerate() {
-            let shift = 60 - 4 * i;
-            *piece = Piece::from_bits((self.pieces >> shift) & 0xF);
+        for piece in pieces.iter_mut().rev() {
+            *piece = Piece::from_bits(bits & LAST_PIECE_MASK);
+            bits >>= BITS_PER_PIECE;
         }
 
         pieces
@@ -84,13 +89,14 @@ impl Position {
     pub fn neighbours(&self, stack: &mut NeighboursStack) {
         stack.neighbours.clear();
 
-        let (top, bottom) = Layer::split(self.pieces);
+        let (top, bottom) = RotatableLayer::split(self.pieces);
         top.rotations(&mut stack.top_before_rotations);
         bottom.rotations(&mut stack.bottom_before_rotations);
 
         for &(rotated_top, top_before) in &stack.top_before_rotations {
             for &(rotated_bottom, bottom_before) in &stack.bottom_before_rotations {
-                let (flipped_top, flipped_bottom) = Layer::flip(rotated_top, rotated_bottom);
+                let (flipped_top, flipped_bottom) =
+                    RotatableLayer::flip(rotated_top, rotated_bottom);
 
                 flipped_top.rotations(&mut stack.top_after_rotations);
                 flipped_bottom.rotations(&mut stack.bottom_after_rotations);
@@ -98,7 +104,7 @@ impl Position {
                 for &(rotated_top, top_after) in &stack.top_after_rotations {
                     for &(rotated_bottom, bottom_after) in &stack.bottom_after_rotations {
                         let (flipped_top, flipped_bottom) =
-                            Layer::flip(rotated_top, rotated_bottom);
+                            RotatableLayer::flip(rotated_top, rotated_bottom);
 
                         stack.neighbours.push(Movement {
                             change: Change {
@@ -108,13 +114,18 @@ impl Position {
                                 bottom_after,
                             },
                             position: Position {
-                                pieces: Layer::join(flipped_top, flipped_bottom),
+                                pieces: RotatableLayer::join(flipped_top, flipped_bottom),
                             },
                         });
                     }
                 }
             }
         }
+    }
+
+    pub fn score(self) -> u8 {
+        let (top, bottom) = ScorableLayer::split(self.pieces);
+        top.score() + bottom.score()
     }
 }
 
@@ -136,6 +147,12 @@ impl NeighboursStack {
     }
 }
 
+impl Default for NeighboursStack {
+    fn default() -> Self {
+        NeighboursStack::new()
+    }
+}
+
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let pieces = self.pieces();
@@ -154,6 +171,16 @@ impl fmt::Display for Position {
         }
 
         Ok(())
+    }
+}
+
+impl fmt::Display for Change {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "T{}B{}T{}B{}",
+            self.top_before, self.bottom_before, self.top_after, self.bottom_after
+        )
     }
 }
 
@@ -199,7 +226,7 @@ mod tests {
 
     #[test]
     fn neighbours() {
-        let solved = Position::from_pieces([
+        let position = Position::from_pieces([
             Piece::YellowOrange,
             Piece::WhiteGreen,
             Piece::WhiteBlueOrange,
@@ -219,11 +246,23 @@ mod tests {
         ]);
         let mut neighbours = NeighboursStack::new();
 
-        solved.neighbours(&mut neighbours);
+        position.neighbours(&mut neighbours);
 
         println!("{}", neighbours.neighbours().len());
         for n in neighbours.neighbours() {
-            println!("{}", n.position);
+            println!("{} = {} = {}", n.change, n.position, n.position.score());
         }
+
+        let unique: BTreeSet<_> = neighbours
+            .neighbours()
+            .iter()
+            .map(|m| m.position.to_string())
+            .collect();
+        assert_eq!(unique.len(), neighbours.neighbours().len());
+    }
+
+    #[test]
+    fn score() {
+        assert_eq!(Position::solved().score(), 16);
     }
 }
