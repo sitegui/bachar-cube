@@ -5,7 +5,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::fmt::Write;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Position {
     pieces: u64,
 }
@@ -147,6 +147,16 @@ impl NeighboursStack {
     }
 }
 
+impl Movement {
+    pub fn change(self) -> Change {
+        self.change
+    }
+
+    pub fn position(self) -> Position {
+        self.position
+    }
+}
+
 impl Default for NeighboursStack {
     fn default() -> Self {
         NeighboursStack::new()
@@ -226,24 +236,7 @@ mod tests {
 
     #[test]
     fn neighbours() {
-        let position = Position::from_pieces([
-            Piece::YellowOrange,
-            Piece::WhiteGreen,
-            Piece::WhiteBlueOrange,
-            Piece::WhiteGreenRed,
-            Piece::YellowBlueRed,
-            Piece::WhiteOrange,
-            Piece::YellowGreenOrange,
-            Piece::YellowGreen,
-            Piece::WhiteRed,
-            Piece::WhiteRedBlue,
-            Piece::WhiteBlue,
-            Piece::WhiteOrangeGreen,
-            Piece::YellowRed,
-            Piece::YellowRedGreen,
-            Piece::YellowOrangeBlue,
-            Piece::YellowBlue,
-        ]);
+        let position = Position::solved();
         let mut neighbours = NeighboursStack::new();
 
         position.neighbours(&mut neighbours);
@@ -259,6 +252,34 @@ mod tests {
             .map(|m| m.position.to_string())
             .collect();
         assert_eq!(unique.len(), neighbours.neighbours().len());
+    }
+
+    #[test]
+    fn double_neighbours() {
+        let position = Position::solved();
+        let mut neighbours = NeighboursStack::new();
+
+        position.neighbours(&mut neighbours);
+        let n1: BTreeSet<_> = neighbours
+            .neighbours()
+            .iter()
+            .map(|m| m.position.to_string())
+            .collect();
+
+        let a_position = neighbours.neighbours()[117].position();
+        a_position.neighbours(&mut neighbours);
+        let n2: BTreeSet<_> = neighbours
+            .neighbours()
+            .iter()
+            .map(|m| m.position.to_string())
+            .collect();
+
+        println!(
+            "{} & {} = {}",
+            n1.len(),
+            n2.len(),
+            n1.intersection(&n2).count()
+        );
     }
 
     #[test]
