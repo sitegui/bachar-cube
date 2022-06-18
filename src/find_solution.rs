@@ -1,12 +1,12 @@
-use crate::position::Movement;
+use crate::position::{Movement, NeighboursStack};
 use crate::prefix_set::PrefixSet;
-use crate::{format_big_int, MovementChange, MovementKind, Position};
+use crate::{format_big_int, Position};
 use crossbeam_utils::atomic::AtomicCell;
 use itertools::Itertools;
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::BinaryHeap;
 
 #[derive(Debug, Clone, Copy)]
 struct VisitedPosition {
@@ -34,7 +34,6 @@ struct MainExplorer {
 
 #[derive(Debug)]
 struct ThreadExplorer<'a> {
-    id: usize,
     iterations: usize,
     main: &'a MainExplorer,
     visits: Vec<VisitedPosition>,
@@ -52,14 +51,14 @@ trait Explorer {
     fn iterations_mut(&mut self) -> &mut usize;
 
     fn enqueue(&mut self, parent: Enqueued, movement: Movement) {
-        if self.insert_position(movement.position) {
+        if self.insert_position(movement.position()) {
             let next_index = self.next_index();
             self.push_visit(VisitedPosition {
                 movement,
                 prev_index: Some(parent.index),
             });
             self.queue_mut().push(Enqueued {
-                score: movement.position.solved_score(),
+                score: movement.position().score(),
                 depth: parent.depth + 1,
                 index: next_index,
             });
@@ -91,22 +90,18 @@ trait Explorer {
 
 impl MainExplorer {
     fn new(initial_position: Position) -> Self {
-        let mut seen_positions = PrefixSet::new();
+        let seen_positions = PrefixSet::new();
         let mut all_movements = Vec::new();
         let mut queue = BinaryHeap::new();
 
-        let initial_movement = Movement {
-            position: initial_position,
-            next_kind: MovementKind::ALL,
-            change: MovementChange::Flip,
-        };
+        let initial_movement = Movement::initial_movement(initial_position);
         all_movements.push(VisitedPosition {
             prev_index: None,
             movement: initial_movement,
         });
         seen_positions.insert(initial_position.as_bytes());
         queue.push(Enqueued {
-            score: initial_position.solved_score(),
+            score: initial_position.score(),
             depth: 0,
             index: 0,
         });
@@ -133,9 +128,7 @@ impl MainExplorer {
         let main = &*self;
         thread_queues
             .into_iter()
-            .enumerate()
-            .map(move |(id, queue)| ThreadExplorer {
-                id,
+            .map(move |queue| ThreadExplorer {
                 iterations: 0,
                 main,
                 visits: vec![],
@@ -245,18 +238,18 @@ pub fn find_solution(
 ) -> Option<Vec<Movement>> {
     let solved_position = Position::solved();
     let mut explorer = MainExplorer::new(initial_position);
+    let mut neighbours = NeighboursStack::new();
 
     while let Some((enqueued, next)) = explorer.pop() {
-        if next.movement.position == solved_position {
+        if next.movement.position() == solved_position {
             explorer.mark_solved(next);
             break;
         }
 
-        next.movement
-            .position
-            .for_each_movement(next.movement.next_kind, |new_movement| {
-                explorer.enqueue(enqueued, new_movement);
-            });
+        next.movement.position().neighbours(&mut neighbours);
+        for &new_movement in neighbours.neighbours() {
+            explorer.enqueue(enqueued, new_movement);
+        }
 
         if explorer.iterations == warm_up {
             break;
@@ -280,17 +273,18 @@ pub fn find_solution(
     thread_explorers
         .into_par_iter()
         .for_each(|mut thread_explorer| {
+            let mut neighbours = NeighboursStack::new();
+
             while let Some((enqueued, next)) = thread_explorer.pop() {
-                if next.movement.position == solved_position {
+                if next.movement.position() == solved_position {
                     thread_explorer.mark_solved(next);
                     break;
                 }
 
-                next.movement
-                    .position
-                    .for_each_movement(next.movement.next_kind, |new_movement| {
-                        thread_explorer.enqueue(enqueued, new_movement);
-                    });
+                next.movement.position().neighbours(&mut neighbours);
+                for &new_movement in neighbours.neighbours() {
+                    thread_explorer.enqueue(enqueued, new_movement);
+                }
             }
         });
 

@@ -1,5 +1,5 @@
-use crate::piece::Piece;
 use crate::position::{BITS_PER_PIECE, LAST_PIECE_MASK};
+use crate::Piece;
 use std::fmt;
 use std::fmt::Write;
 

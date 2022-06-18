@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use parking_lot::Mutex;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::mem;
 
 /// Represent the set of all possible [`u64`].

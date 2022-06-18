@@ -1,218 +1,305 @@
-use crate::outer_layer::OuterLayer;
-use crate::outer_piece::OuterPiece;
+use crate::piece::Piece;
+use crate::rotatable_layer::RotatableLayer;
+use crate::scorable_layer::ScorableLayer;
+use itertools::Itertools;
 use std::fmt;
+use std::fmt::Write;
 
-#[derive(Debug, Clone, Copy, Hash, Eq, Ord, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Position {
-    top: OuterLayer,
-    middle_solved: bool,
-    bottom: OuterLayer,
+    pieces: u64,
 }
 
-/// Represents the allowed movements from this position
-///
-/// Bit 0 = can rotate top
-/// Bit 1 = can flip
-/// Bit 2 = can rotate bottom
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct MovementKind(u8);
+#[derive(Debug, Clone, Copy)]
+pub struct Change {
+    top_before: u8,
+    bottom_before: u8,
+    top_after: u8,
+    bottom_after: u8,
+}
 
-impl MovementKind {}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Movement {
-    pub position: Position,
-    pub next_kind: MovementKind,
-    pub change: MovementChange,
+    change: Change,
+    position: Position,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum MovementChange {
-    Flip,
-    RotateTop(u8),
-    RotateBottom(u8),
+/// A helper struct used by [`Position::neighbours()`] to avoid intermediate allocations in every
+/// call.
+#[derive(Debug, Clone)]
+pub struct NeighboursStack {
+    neighbours: Vec<Movement>,
+    top_before_rotations: Vec<(RotatableLayer, u8)>,
+    bottom_before_rotations: Vec<(RotatableLayer, u8)>,
+    top_after_rotations: Vec<(RotatableLayer, u8)>,
+    bottom_after_rotations: Vec<(RotatableLayer, u8)>,
 }
+
+pub const BITS_PER_PIECE: u32 = 4;
+pub const LAST_PIECE_MASK: u64 = 0xF;
 
 impl Position {
-    pub fn with_layers(top: OuterLayer, middle_solved: bool, bottom: OuterLayer) -> Self {
-        Position {
-            top,
-            middle_solved,
-            bottom,
+    pub fn solved() -> Self {
+        use Piece::*;
+
+        Self::from_pieces([
+            WhiteRedBlue,
+            WhiteBlue,
+            WhiteBlueOrange,
+            WhiteOrange,
+            WhiteOrangeGreen,
+            WhiteGreen,
+            WhiteGreenRed,
+            WhiteRed,
+            YellowOrange,
+            YellowOrangeBlue,
+            YellowBlue,
+            YellowBlueRed,
+            YellowRed,
+            YellowRedGreen,
+            YellowGreen,
+            YellowGreenOrange,
+        ])
+    }
+
+    pub fn from_pieces(pieces: [Piece; 16]) -> Self {
+        assert_eq!(pieces.iter().unique().count(), 16);
+
+        let mut as_bits = 0;
+        for piece in pieces {
+            as_bits <<= BITS_PER_PIECE;
+            as_bits |= piece.as_bits();
+        }
+
+        Position { pieces: as_bits }
+    }
+
+    pub fn pieces(&self) -> [Piece; 16] {
+        let mut pieces = [Piece::YellowRedGreen; 16];
+        let mut bits = self.pieces;
+
+        for piece in pieces.iter_mut().rev() {
+            *piece = Piece::from_bits(bits & LAST_PIECE_MASK);
+            bits >>= BITS_PER_PIECE;
+        }
+
+        pieces
+    }
+
+    pub fn neighbours(&self, stack: &mut NeighboursStack) {
+        stack.neighbours.clear();
+
+        let (top, bottom) = RotatableLayer::split(self.pieces);
+        top.rotations(&mut stack.top_before_rotations);
+        bottom.rotations(&mut stack.bottom_before_rotations);
+
+        for &(rotated_top, top_before) in &stack.top_before_rotations {
+            for &(rotated_bottom, bottom_before) in &stack.bottom_before_rotations {
+                let (flipped_top, flipped_bottom) =
+                    RotatableLayer::flip(rotated_top, rotated_bottom);
+
+                flipped_top.rotations(&mut stack.top_after_rotations);
+                flipped_bottom.rotations(&mut stack.bottom_after_rotations);
+
+                for &(rotated_top, top_after) in &stack.top_after_rotations {
+                    for &(rotated_bottom, bottom_after) in &stack.bottom_after_rotations {
+                        let (flipped_top, flipped_bottom) =
+                            RotatableLayer::flip(rotated_top, rotated_bottom);
+
+                        stack.neighbours.push(Movement {
+                            change: Change {
+                                top_before,
+                                bottom_before,
+                                top_after,
+                                bottom_after,
+                            },
+                            position: Position {
+                                pieces: RotatableLayer::join(flipped_top, flipped_bottom),
+                            },
+                        });
+                    }
+                }
+            }
         }
     }
 
-    pub fn solved() -> Position {
-        Position::with_layers(
-            OuterLayer::new([
-                OuterPiece::WhiteRedBlue1,
-                OuterPiece::WhiteRedBlue2,
-                OuterPiece::WhiteBlue,
-                OuterPiece::WhiteBlueOrange1,
-                OuterPiece::WhiteBlueOrange2,
-                OuterPiece::WhiteOrange,
-                OuterPiece::WhiteOrangeGreen1,
-                OuterPiece::WhiteOrangeGreen2,
-                OuterPiece::WhiteGreen,
-                OuterPiece::WhiteGreenRed1,
-                OuterPiece::WhiteGreenRed2,
-                OuterPiece::WhiteRed,
-            ]),
-            true,
-            OuterLayer::new([
-                OuterPiece::YellowOrange,
-                OuterPiece::YellowOrangeBlue1,
-                OuterPiece::YellowOrangeBlue2,
-                OuterPiece::YellowBlue,
-                OuterPiece::YellowBlueRed1,
-                OuterPiece::YellowBlueRed2,
-                OuterPiece::YellowRed,
-                OuterPiece::YellowRedGreen1,
-                OuterPiece::YellowRedGreen2,
-                OuterPiece::YellowGreen,
-                OuterPiece::YellowGreenOrange1,
-                OuterPiece::YellowGreenOrange2,
-            ]),
-        )
+    pub fn score(self) -> u8 {
+        let (top, bottom) = ScorableLayer::split(self.pieces);
+        top.score() + bottom.score()
     }
 
-    pub fn changed(self, change: MovementChange) -> Self {
-        match change {
-            MovementChange::Flip => self.flipped(),
-            MovementChange::RotateTop(n) => Position::with_layers(
-                self.top.rotated(n as usize),
-                self.middle_solved,
-                self.bottom,
-            ),
-            MovementChange::RotateBottom(n) => Position::with_layers(
-                self.top,
-                self.middle_solved,
-                self.bottom.rotated(n as usize),
-            ),
-        }
-    }
-
-    pub fn flipped(self) -> Self {
-        let (flipped_top, flipped_bottom) = self.top.flipped(self.bottom);
-        Position::with_layers(flipped_top, !self.middle_solved, flipped_bottom)
-    }
-
-    pub fn for_each_movement(&self, kind: MovementKind, mut f: impl FnMut(Movement)) {
-        if kind.rotate_top() {
-            self.top.for_each_movement(|new_top, shift| {
-                let new_position = Position::with_layers(new_top, self.middle_solved, self.bottom);
-                f(Movement {
-                    position: new_position,
-                    next_kind: MovementKind::new(false, true, kind.rotate_bottom()),
-                    change: MovementChange::RotateTop(shift),
-                })
-            });
-        }
-
-        if kind.flip() {
-            f(Movement {
-                position: self.flipped(),
-                next_kind: MovementKind::new(true, false, true),
-                change: MovementChange::Flip,
-            });
-        }
-
-        if kind.rotate_bottom() {
-            self.bottom.for_each_movement(|new_bottom, shift| {
-                let new_position = Position::with_layers(self.top, self.middle_solved, new_bottom);
-                f(Movement {
-                    position: new_position,
-                    next_kind: MovementKind::new(kind.rotate_top(), true, false),
-                    change: MovementChange::RotateBottom(shift),
-                })
-            });
-        }
-    }
-
-    /// Return how many pieces are relatively well placed
-    pub fn solved_score(self) -> u8 {
-        self.top.solved_score() + self.middle_solved as u8 + self.bottom.solved_score()
-    }
-
-    /// Return a very dense representation of the position, meant to represent very efficiently
-    /// this position.
-    ///
-    /// Each top piece is encoded in order, then each bottom piece is encoded in order, except the
-    /// last one (because it's a redundant information). Each piece is encoded as 4 bits.
-    ///
-    /// The last 4 bits are used to represent the middle piece.
     pub fn as_bytes(self) -> u64 {
-        let mut encoded = 0;
-
-        // There are exactly 16 pieces with id in total, so this will fill in all the 64 bits
-        for piece in self.top.pieces() {
-            if let Some(id) = piece.id() {
-                encoded <<= 4;
-                encoded |= id as u64;
-            }
-        }
-        for piece in self.bottom.pieces() {
-            if let Some(id) = piece.id() {
-                encoded <<= 4;
-                encoded |= id as u64;
-            }
-        }
-
-        // Ditch the last 4 bits
-        encoded >>= 4;
-        encoded <<= 4;
-
-        // The last 4 bits represent the middle piece
-        encoded |= self.middle_solved as u64;
-
-        encoded
+        self.pieces
     }
 }
 
-impl MovementKind {
-    pub const ALL: MovementKind = MovementKind::new(true, true, true);
-
-    const fn new(rotate_top: bool, flip: bool, rotate_bottom: bool) -> Self {
-        MovementKind((rotate_top as u8) << 2 | (flip as u8) << 1 | (rotate_bottom as u8))
+impl NeighboursStack {
+    pub fn new() -> Self {
+        NeighboursStack {
+            // Worst-case scenario: each one of `top_before`, `bottom_before`, `top_after`,
+            // `bottom_after` goes from 0 to 9 (inclusive).
+            neighbours: Vec::with_capacity(10_000),
+            top_before_rotations: Vec::with_capacity(10),
+            bottom_before_rotations: Vec::with_capacity(10),
+            top_after_rotations: Vec::with_capacity(10),
+            bottom_after_rotations: Vec::with_capacity(10),
+        }
     }
 
-    fn rotate_top(self) -> bool {
-        self.0 & 0b100 != 0
-    }
-
-    fn flip(self) -> bool {
-        self.0 & 0b10 != 0
-    }
-
-    fn rotate_bottom(self) -> bool {
-        self.0 & 0b1 != 0
+    pub fn neighbours(&self) -> &[Movement] {
+        &self.neighbours
     }
 }
 
-impl MovementChange {
-    pub fn inversed(self) -> Self {
-        use MovementChange::*;
-        match self {
-            Flip => Flip,
-            RotateTop(n) => RotateTop(12 - n),
-            RotateBottom(n) => RotateBottom(12 - n),
+impl Movement {
+    pub fn initial_movement(position: Position) -> Self {
+        Movement {
+            change: Change {
+                top_before: 0,
+                bottom_before: 0,
+                top_after: 0,
+                bottom_after: 0,
+            },
+            position,
         }
+    }
+
+    pub fn change(self) -> Change {
+        self.change
+    }
+
+    pub fn position(self) -> Position {
+        self.position
+    }
+}
+
+impl Default for NeighboursStack {
+    fn default() -> Self {
+        NeighboursStack::new()
     }
 }
 
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {} {}", self.top, self.middle_solved, self.bottom)
+        let pieces = self.pieces();
+        let mut size = 0;
+
+        for piece in pieces {
+            if size == 6 || size == 12 || size == 18 {
+                f.write_str(" | ")?;
+            } else if size != 0 {
+                f.write_char(' ')?;
+            }
+
+            write!(f, "{}", piece)?;
+
+            size += piece.size();
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for Change {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "T{}B{}T{}B{}",
+            self.top_before, self.bottom_before, self.top_after, self.bottom_after
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
 
     #[test]
-    fn solved_score() {
-        assert_eq!(Position::solved().solved_score(), 25);
-        assert_eq!(Position::solved().flipped().solved_score(), 20);
+    fn pieces() {
+        use Piece::*;
+
+        let solved = Position::solved();
+        let pieces = solved.pieces();
+
+        assert_eq!(
+            pieces,
+            [
+                WhiteRedBlue,
+                WhiteBlue,
+                WhiteBlueOrange,
+                WhiteOrange,
+                WhiteOrangeGreen,
+                WhiteGreen,
+                WhiteGreenRed,
+                WhiteRed,
+                YellowOrange,
+                YellowOrangeBlue,
+                YellowBlue,
+                YellowBlueRed,
+                YellowRed,
+                YellowRedGreen,
+                YellowGreen,
+                YellowGreenOrange
+            ]
+        );
+
+        assert_eq!(
+            solved.to_string(),
+            "WRB WB WBO WO | WOG WG WGR WR | YO YOB YB YBR | YR YRG YG YGO"
+        );
+    }
+
+    #[test]
+    fn neighbours() {
+        let position = Position::solved();
+        let mut neighbours = NeighboursStack::new();
+
+        position.neighbours(&mut neighbours);
+
+        println!("{}", neighbours.neighbours().len());
+        for n in neighbours.neighbours() {
+            println!("{} = {} = {}", n.change, n.position, n.position.score());
+        }
+
+        let unique: BTreeSet<_> = neighbours
+            .neighbours()
+            .iter()
+            .map(|m| m.position.to_string())
+            .collect();
+        assert_eq!(unique.len(), neighbours.neighbours().len());
+    }
+
+    #[test]
+    fn double_neighbours() {
+        let position = Position::solved();
+        let mut neighbours = NeighboursStack::new();
+
+        position.neighbours(&mut neighbours);
+        let n1: BTreeSet<_> = neighbours
+            .neighbours()
+            .iter()
+            .map(|m| m.position.to_string())
+            .collect();
+
+        let a_position = neighbours.neighbours()[117].position();
+        a_position.neighbours(&mut neighbours);
+        let n2: BTreeSet<_> = neighbours
+            .neighbours()
+            .iter()
+            .map(|m| m.position.to_string())
+            .collect();
+
+        println!(
+            "{} & {} = {}",
+            n1.len(),
+            n2.len(),
+            n1.intersection(&n2).count()
+        );
+    }
+
+    #[test]
+    fn score() {
+        assert_eq!(Position::solved().score(), 16);
     }
 }
