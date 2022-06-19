@@ -42,11 +42,12 @@ fn main() -> Result<()> {
         .build_global()?;
 
     let start = Instant::now();
-    let solution = find_solution::find_solution(initial_position, 10_000, NUM_THREADS)
+    let solution = find_solution::find_solution(initial_position, 100_000, NUM_THREADS)
         .context("expected a solution to be found")?;
     println!("find_solution in {:?}", start.elapsed());
 
     println!("{}", solution.iter().map(|m| m.change()).format(", "));
+    println!("Solution has {} steps", 6 * solution.len());
 
     Ok(())
 }

@@ -30,6 +30,7 @@ struct MainExplorer {
     queue: BinaryHeap<Enqueued>,
     is_solved: AtomicCell<bool>,
     solution: Mutex<Option<Vec<Movement>>>,
+    rejections: usize,
 }
 
 #[derive(Debug)]
@@ -38,6 +39,7 @@ struct ThreadExplorer<'a> {
     main: &'a MainExplorer,
     visits: Vec<VisitedPosition>,
     queue: BinaryHeap<Enqueued>,
+    rejections: usize,
 }
 
 trait Explorer {
@@ -49,6 +51,7 @@ trait Explorer {
     fn is_solved(&self) -> bool;
     fn set_solution(&self, solution: Vec<Movement>);
     fn iterations_mut(&mut self) -> &mut usize;
+    fn rejections_mut(&mut self) -> &mut usize;
 
     fn enqueue(&mut self, parent: Enqueued, movement: Movement) {
         if self.insert_position(movement.position()) {
@@ -62,6 +65,8 @@ trait Explorer {
                 depth: parent.depth + 1,
                 index: next_index,
             });
+        } else {
+            *self.rejections_mut() += 1;
         }
     }
 
@@ -113,6 +118,7 @@ impl MainExplorer {
             queue,
             is_solved: AtomicCell::new(false),
             solution: Mutex::new(None),
+            rejections: 0,
         }
     }
 
@@ -133,6 +139,7 @@ impl MainExplorer {
                 main,
                 visits: vec![],
                 queue,
+                rejections: 0,
             })
             .collect()
     }
@@ -174,6 +181,10 @@ impl Explorer for MainExplorer {
 
     fn iterations_mut(&mut self) -> &mut usize {
         &mut self.iterations
+    }
+
+    fn rejections_mut(&mut self) -> &mut usize {
+        &mut self.rejections
     }
 }
 
@@ -229,6 +240,10 @@ impl Explorer for ThreadExplorer<'_> {
     fn iterations_mut(&mut self) -> &mut usize {
         &mut self.iterations
     }
+
+    fn rejections_mut(&mut self) -> &mut usize {
+        &mut self.rejections
+    }
 }
 
 pub fn find_solution(
@@ -278,6 +293,15 @@ pub fn find_solution(
             while let Some((enqueued, next)) = thread_explorer.pop() {
                 if next.movement.position() == solved_position {
                     thread_explorer.mark_solved(next);
+
+                    println!(
+                        "Solved after {} iterations, {} distinct seen, {} in the queue, {} rejections",
+                        format_big_int(thread_explorer.iterations),
+                        format_big_int(thread_explorer.main.seen_positions.len()),
+                        format_big_int(thread_explorer.queue.len()),
+                        format_big_int(thread_explorer.rejections)
+                    );
+
                     break;
                 }
 
